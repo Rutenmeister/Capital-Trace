@@ -453,3 +453,67 @@ td a { color: var(--teal); }
   .record-details { padding: .85rem; }
   .summary-badges span, .expand-indicator { font-size: .66rem; }
 }
+
+/* =========================================================
+   CAPITAL TRACE v0.6 ATTENTION COMPRESSION PATCH
+========================================================= */
+.no-wrap,
+.metric-card .tiny-label {
+  white-space: nowrap;
+}
+.metric-card {
+  min-width: 0;
+}
+.metric-card .tiny-label {
+  font-size: 9px;
+  letter-spacing: .10em;
+}
+.metric-card strong {
+  line-height: 1;
+}
+.summary-badges .action-pill {
+  white-space: nowrap;
+  min-width: max-content;
+}
+.readout-card #briefTitle,
+#briefTitle {
+  text-wrap: balance;
+}
+.control-block select#focusFilter {
+  border-color: rgba(64,241,223,.24);
+}
+.record-summary .event-title {
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   CAPITAL TRACE v0.6a STAT ALIGNMENT PATCH
+   Keeps the Evidence Queue stat numbers on the same visual baseline.
+========================================================= */
+.metric-strip {
+  align-items: stretch;
+}
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 4.7rem;
+}
+.metric-card .tiny-label {
+  display: flex;
+  align-items: center;
+  min-height: 1.05rem;
+  line-height: 1.05;
+}
+.metric-card strong {
+  display: flex;
+  align-items: center;
+  min-height: 1.65rem;
+  margin-top: .32rem;
+  line-height: 1;
+}
+.metric-card strong#statResearchNow,
+#statResearchNow {
+  line-height: 1;
+  transform: translateY(0);
+}
