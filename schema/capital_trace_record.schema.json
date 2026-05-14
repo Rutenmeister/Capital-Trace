@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Capital Trace Normalized Record",
+  "type": "object",
+  "required": [
+    "record_id",
+    "ticker",
+    "company",
+    "source_type",
+    "record_type",
+    "event_type",
+    "filed_date",
+    "score",
+    "evidence_grade",
+    "freshness",
+    "actionability",
+    "source_url"
+  ],
+  "properties": {
+    "record_id": {
+      "type": "string"
+    },
+    "ticker": {
+      "type": "string"
+    },
+    "company": {
+      "type": "string"
+    },
+    "source_group": {
+      "type": "string"
+    },
+    "source_type": {
+      "type": "string"
+    },
+    "source_form": {
+      "type": "string"
+    },
+    "record_type": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "entity_type": {
+      "type": "string"
+    },
+    "filer": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "owner_type": {
+      "type": "string"
+    },
+    "filed_date": {
+      "type": "string"
+    },
+    "event_date": {
+      "type": "string"
+    },
+    "period_end": {
+      "type": "string"
+    },
+    "accession_number": {
+      "type": "string"
+    },
+    "evidence_grade": {
+      "type": "string"
+    },
+    "freshness": {
+      "type": "string"
+    },
+    "actionability": {
+      "type": "string"
+    },
+    "caveat": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "score": {
+      "type": "number"
+    },
+    "watchlist_match": {
+      "type": "boolean"
+    },
+    "rank_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "does_not_prove": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

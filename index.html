@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Capital Trace | Edgefield Research Tools</title>
+  <meta name="description" content="Public records of capital movement, traced to the source." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <div class="workspace">
+      <header class="glass app-header">
+        <div>
+          <div class="tiny-label accent-label">Edgefield Research</div>
+          <h1>Capital Trace</h1>
+          <p class="header-copy">Public records of capital movement, traced to the source. Evidence-ranked research only, not investment advice.</p>
+        </div>
+        <div class="header-actions">
+          <div class="release-stamp">Capital Trace v0.4 · Evidence Queue</div>
+          <div class="action-grid">
+            <button id="refreshButton" type="button" class="primary-action">Check Now</button>
+            <button id="exportButton" type="button" class="chip-button">Download CSV</button>
+            <a class="chip-button link-button" href="#all-records">All records</a>
+          </div>
+          <p id="syncStatus" class="sync-status">Hosted mode checks the latest saved record file every 5 minutes. Local mode uses embedded sample records.</p>
+        </div>
+      </header>
+
+      <section class="terminal-grid">
+        <aside class="glass side-panel">
+          <div class="soft-card how-card">
+            <div class="tiny-label">How to read Capital Trace</div>
+            <ol>
+              <li>Start with the Evidence Queue, not the full feed.</li>
+              <li>Use Actionability as the first filter, then check Evidence Grade and Freshness.</li>
+              <li>Open the source record before treating anything as meaningful.</li>
+            </ol>
+          </div>
+
+          <div class="panel-block">
+            <div class="tiny-label">Scanner</div>
+            <h2>Trace Controls</h2>
+          </div>
+
+          <label class="control-block">
+            <span class="tiny-label">Search</span>
+            <input id="searchInput" type="search" placeholder="NVDA, CEO, Berkshire, activist..." autocomplete="off" />
+          </label>
+
+          <label class="control-block">
+            <span class="tiny-label">Record type</span>
+            <select id="typeFilter"><option value="all">All record types</option></select>
+          </label>
+
+          <label class="control-block">
+            <span class="tiny-label">Actionability</span>
+            <select id="actionFilter">
+              <option value="all">All classes</option>
+              <option>Research Now</option>
+              <option>Watch</option>
+              <option>Context Only</option>
+              <option>Low Signal</option>
+            </select>
+          </label>
+
+          <label class="control-block range-block">
+            <span class="tiny-label">Minimum score</span>
+            <input id="minScore" type="range" min="0" max="100" step="5" value="0" />
+            <span id="minScoreValue" class="range-value">0+</span>
+          </label>
+
+          <label class="watch-toggle soft-card">
+            <input id="watchlistOnly" type="checkbox" />
+            <span>
+              <strong>Watchlist only</strong>
+              <small>Show only records tagged to the sample watchlist.</small>
+            </span>
+          </label>
+
+          <label class="watch-toggle soft-card">
+            <input id="hideLowSignal" type="checkbox" checked />
+            <span>
+              <strong>Hide low-signal records</strong>
+              <small>Keep the queue focused on Research Now, Watch, and Context Only records.</small>
+            </span>
+          </label>
+
+          <div class="soft-card methodology-mini">
+            <div class="tiny-label">Core principle</div>
+            <p>Capital Trace is not a signal feed. It compresses public records into an evidence-ranked reading queue.</p>
+          </div>
+        </aside>
+
+        <section class="glass main-panel" id="top-signals">
+          <div class="panel-head">
+            <div>
+              <div class="tiny-label">Decision compression</div>
+              <h2>Evidence Queue</h2>
+              <p>Ranked public records by significance, freshness, source quality, and uncertainty. Expand a row to audit the reasoning.</p>
+            </div>
+            <div class="metric-strip">
+              <div class="metric-card"><div class="tiny-label">Records</div><strong id="statTotal">-</strong></div>
+              <div class="metric-card"><div class="tiny-label">Research now</div><strong id="statResearchNow">-</strong></div>
+              <div class="metric-card"><div class="tiny-label">Watchlist</div><strong id="statWatchlist">-</strong></div>
+              <div class="metric-card"><div class="tiny-label">Refresh</div><strong id="statRefresh">-</strong></div>
+            </div>
+          </div>
+
+          <div id="evidenceQueue" class="evidence-queue" aria-live="polite"></div>
+        </section>
+
+        <aside class="glass right-panel">
+          <div class="panel-block">
+            <div class="tiny-label">Current readout</div>
+            <h2 id="briefTitle">Loading records...</h2>
+            <p id="briefText">Capital Trace is reading the local evidence file.</p>
+          </div>
+
+          <div class="soft-card readout-card">
+            <div class="tiny-label">Queue diagnosis</div>
+            <div class="readout-grid">
+              <div><span id="readoutResearch">-</span><small>Research Now</small></div>
+              <div><span id="readoutWatch">-</span><small>Watch</small></div>
+              <div><span id="readoutContext">-</span><small>Context Only</small></div>
+              <div><span id="readoutHidden">-</span><small>Low Signal hidden</small></div>
+            </div>
+          </div>
+
+          <div class="soft-card readout-card">
+            <div class="tiny-label">Refresh rhythm</div>
+            <div class="readout-grid">
+              <div><span id="lastSecCheck">-</span><small>Last SEC check</small></div>
+              <div><span id="nextSecCheck">-</span><small>Next scheduled check</small></div>
+              <div><span id="dataMode">-</span><small>Data mode</small></div>
+              <div><span id="sourceCoverage">-</span><small>Coverage</small></div>
+            </div>
+          </div>
+
+          <div class="soft-card readout-card">
+            <div class="tiny-label">Evidence language</div>
+            <div class="readout-grid">
+              <div><span>A/B</span><small>Direct or useful record</small></div>
+              <div><span>C/D</span><small>Context or noise</small></div>
+              <div><span>Fresh</span><small>Recent filing event</small></div>
+              <div><span>Delayed</span><small>Useful but lagged</small></div>
+            </div>
+          </div>
+
+          <div class="soft-card readout-card">
+            <div class="tiny-label">What to do first</div>
+            <p>Use Research Now records as a reading queue. Use Watch records as a follow-up list. Treat Context Only records as background, not action.</p>
+          </div>
+
+          <div class="soft-card readout-card caution-card">
+            <div class="tiny-label">Not proved by records</div>
+            <p>Future price movement, undisclosed knowledge, intent, or investment suitability. The source record is evidence, not a conclusion.</p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="glass records-panel full-width-panel">
+        <div class="panel-head compact-head">
+          <div>
+            <div class="tiny-label">Filtered record stack</div>
+            <h2>Visible Reading Queue</h2>
+          </div>
+          <p id="visibleCount" class="visible-count">-</p>
+        </div>
+        <div id="visibleRecordStack" class="record-stack"></div>
+      </section>
+
+      <section class="glass table-panel" id="all-records">
+        <div class="panel-head compact-head">
+          <div>
+            <div class="tiny-label">Source-linked table</div>
+            <h2>All Visible Records</h2>
+          </div>
+          <p id="tableCount" class="visible-count">-</p>
+        </div>
+        <div id="recordsTable" class="table-wrap" role="region" aria-label="All records table" tabindex="0"></div>
+      </section>
+
+      <section class="glass methodology-panel" id="methodology">
+        <details open>
+          <summary>How Capital Trace ranks records</summary>
+          <div class="method-grid">
+            <article class="soft-card"><div class="tiny-label">Score</div><p>Records are scored by event type, directness, role significance, transaction size, watchlist relevance, source quality, and uncertainty penalties.</p></article>
+            <article class="soft-card"><div class="tiny-label">Evidence Grade</div><p>A-grade records are direct, recent, exact, and source-linked. Lower grades indicate delay, ambiguity, administrative noise, or weaker signal value.</p></article>
+            <article class="soft-card"><div class="tiny-label">Actionability</div><p>Actionability is a research label, not investment advice. It compresses the record into Research Now, Watch, Context Only, or Low Signal.</p></article>
+            <article class="soft-card"><div class="tiny-label">Limits</div><p>Capital Trace does not predict price movement, infer intent, or replace due diligence. It organizes public records and preserves caveats.</p></article>
+          </div>
+        </details>
+      </section>
+
+      <footer class="glass footer-note">
+        <div><strong>Capital Trace v0.4</strong></div>
+        <div>Static prototype with hosted JSON auto-check support. Future SEC refresh jobs can update data/capital_trace.json without changing the dashboard.</div>
+      </footer>
+    </div>
+  </main>
+
+  <template id="recordCardTemplate">
+    <article class="record-card soft-card collapsed">
+      <button class="record-summary" type="button" aria-expanded="false">
+        <div class="summary-main">
+          <div class="summary-topline">
+            <span class="ticker"></span>
+            <span class="event-title"></span>
+            <span class="watchlist-badge">Watchlist</span>
+          </div>
+          <p class="company-line"></p>
+        </div>
+        <div class="summary-badges">
+          <span class="action-pill"></span>
+          <span class="grade-pill"></span>
+          <span class="freshness-pill"></span>
+          <span class="score-pill"></span>
+        </div>
+        <span class="expand-indicator">Expand</span>
+      </button>
+      <div class="record-details">
+        <dl class="record-meta">
+          <div><dt>Filer</dt><dd class="filer"></dd></div>
+          <div><dt>Source</dt><dd class="source"></dd></div>
+          <div><dt>Filed</dt><dd class="filed"></dd></div>
+        </dl>
+        <div class="why-block">
+          <h4>Why it ranked</h4>
+          <ul class="rank-reasons"></ul>
+        </div>
+        <div class="limit-block">
+          <h4>What this does not prove</h4>
+          <ul class="does-not-prove"></ul>
+        </div>
+        <p class="method-line"></p>
+        <p class="caveat"></p>
+        <a class="source-link" target="_blank" rel="noopener noreferrer">View source record</a>
+      </div>
+    </article>
+  </template>
+
+  <script src="data/capital_trace_data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
