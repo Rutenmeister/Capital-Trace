@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Capital Trace | Edgefield Research Tools</title>
   <meta name="description" content="Public records of capital movement, traced to the source." />
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="app-shell">
@@ -17,7 +17,7 @@
           <p class="header-copy">Public records of capital movement, traced to the source. Evidence-ranked research only, not investment advice.</p>
         </div>
         <div class="header-actions">
-          <div class="release-stamp">Capital Trace v0.4 · Evidence Queue</div>
+          <div class="release-stamp">Capital Trace v0.6 · Evidence Queue</div>
           <div class="action-grid">
             <button id="refreshButton" type="button" class="primary-action">Check Now</button>
             <button id="exportButton" type="button" class="chip-button">Download CSV</button>
@@ -64,6 +64,15 @@
             </select>
           </label>
 
+          <label class="control-block">
+            <span class="tiny-label">Focus view</span>
+            <select id="focusFilter">
+              <option value="all">All matching records</option>
+              <option value="top10">Top 10 highest signal</option>
+              <option value="purchases">Purchases only</option>
+            </select>
+          </label>
+
           <label class="control-block range-block">
             <span class="tiny-label">Minimum score</span>
             <input id="minScore" type="range" min="0" max="100" step="5" value="0" />
@@ -101,7 +110,7 @@
             </div>
             <div class="metric-strip">
               <div class="metric-card"><div class="tiny-label">Records</div><strong id="statTotal">-</strong></div>
-              <div class="metric-card"><div class="tiny-label">Research now</div><strong id="statResearchNow">-</strong></div>
+              <div class="metric-card"><div class="tiny-label no-wrap">Research Now</div><strong id="statResearchNow">-</strong></div>
               <div class="metric-card"><div class="tiny-label">Watchlist</div><strong id="statWatchlist">-</strong></div>
               <div class="metric-card"><div class="tiny-label">Refresh</div><strong id="statRefresh">-</strong></div>
             </div>
@@ -123,7 +132,7 @@
               <div><span id="readoutResearch">-</span><small>Research Now</small></div>
               <div><span id="readoutWatch">-</span><small>Watch</small></div>
               <div><span id="readoutContext">-</span><small>Context Only</small></div>
-              <div><span id="readoutHidden">-</span><small>Low Signal hidden</small></div>
+              <div><span id="readoutHidden">-</span><small>Low Signal records</small></div>
             </div>
           </div>
 
@@ -194,8 +203,8 @@
       </section>
 
       <footer class="glass footer-note">
-        <div><strong>Capital Trace v0.4</strong></div>
-        <div>Static prototype with hosted JSON auto-check support. Future SEC refresh jobs can update data/capital_trace.json without changing the dashboard.</div>
+        <div><strong>Capital Trace v0.6</strong></div>
+        <div>Hosted SEC Form 4 watchlist prototype. GitHub Actions refreshes data/capital_trace.json; dashboard check reloads the saved record file.</div>
       </footer>
     </div>
   </main>
