@@ -5,10 +5,10 @@
     "data_mode": "sec-form-4-watchlist",
     "source_pipeline": "sec-edgar-form4-watchlist",
     "refresh_frequency": "hourly",
-    "last_refreshed": "2026-05-14T22:39:59Z",
-    "last_data_update": "2026-05-14T22:39:59Z",
-    "last_sec_check": "2026-05-14T22:39:59Z",
-    "next_scheduled_check": "2026-05-14T23:00:00Z",
+    "last_refreshed": "2026-05-15T09:37:33Z",
+    "last_data_update": "2026-05-15T09:37:33Z",
+    "last_sec_check": "2026-05-15T09:37:33Z",
+    "next_scheduled_check": "2026-05-15T10:00:00Z",
     "source_groups": [
       "SEC Insider Ownership"
     ],
