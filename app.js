@@ -1,6 +1,37 @@
 const DASHBOARD_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_ORDER = ['complete', 'partial', 'minimal', 'failed'];
 
+const EXPECTED_LANES = [
+  {
+    key: 'insider_form4',
+    label: 'SEC Form 4',
+    lane: 'insider',
+    forms: ['Form 4', '4', '4/A'],
+    match: (record) => !isOwnership(record) && !isInstitutional(record) && !isProposedSale(record),
+  },
+  {
+    key: 'ownership_13d_13g',
+    label: 'SEC 13D/G Ownership',
+    lane: 'ownership',
+    forms: ['SC 13D', 'SC 13D/A', 'SC 13G', 'SC 13G/A'],
+    match: (record) => isOwnership(record),
+  },
+  {
+    key: 'institutional_13f',
+    label: 'SEC 13F Institutional Holdings',
+    lane: 'institutional',
+    forms: ['13F-HR', '13F-HR/A'],
+    match: (record) => isInstitutional(record),
+  },
+  {
+    key: 'proposed_sales_144',
+    label: 'SEC Form 144 Proposed Sales',
+    lane: 'proposed_sales',
+    forms: ['Form 144', '144', '144/A'],
+    match: (record) => isProposedSale(record),
+  },
+];
+
 const state = {
   records: [],
   filtered: [],
