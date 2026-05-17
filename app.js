@@ -106,9 +106,72 @@ function firstArray(...candidates) {
 function toNumber(value, fallback = 0) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (value === null || value === undefined || value === '') return fallback;
-  const cleaned = String(value).replace(/[$,%\s,]/g, '');
+  const raw = String(value).trim();
+  const unitMatch = raw.match(/^\$?\s*([+-]?[0-9,.]+)\s*([KMBT])?\s*%?$/i);
+  if (unitMatch) {
+    const base = Number(unitMatch[1].replace(/,/g, ''));
+    if (Number.isFinite(base)) {
+      const unit = String(unitMatch[2] || '').toUpperCase();
+      const multiplier = unit === 'T' ? 1e12 : unit === 'B' ? 1e9 : unit === 'M' ? 1e6 : unit === 'K' ? 1e3 : 1;
+      return base * multiplier;
+    }
+  }
+  const cleaned = raw.replace(/[$,%\s,]/g, '');
   const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function is13FLikeRecord(record = {}) {
+  const text = [record.filing_type, record.source_form, record.source_type, record.source_group, record.record_type].join(' ').toLowerCase();
+  return text.includes('13f') || text.includes('institutional');
+}
+
+function formatMoneyDisplay(value) {
+  const n = toNumber(value, null);
+  if (n === null || !Number.isFinite(n)) return 'Not disclosed / not parsed';
+  const sign = n < 0 ? '-' : '';
+  const abs = Math.abs(n);
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return `${sign}$${abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function normalize13FMarketValue(record = {}) {
+  if (!is13FLikeRecord(record)) return toNumber(record.market_value || record.transaction_value || record.estimated_value, 0);
+  const rawThousands = toNumber(record.reported_market_value_thousands, null);
+  if (rawThousands !== null && Number.isFinite(rawThousands)) return rawThousands * 1000;
+  const explicitUsd = toNumber(record.reported_market_value_usd, null);
+  if (explicitUsd !== null && Number.isFinite(explicitUsd)) return explicitUsd;
+  let value = toNumber(record.market_value || record.transaction_value || record.estimated_value, 0);
+  // Guard legacy v0.12 data that displayed single 13F holdings 1,000x too high.
+  // Example: Berkshire AAPL should be ~$20.47B, not $20,471.92B.
+  if (value >= 2e12) value = value / 1000;
+  return value;
+}
+
+function sanitizeKeyFigures(record = {}, normalizedMarketValue = null) {
+  const figures = { ...(record.key_figures || record.figures || {}) };
+  if (is13FLikeRecord(record)) {
+    const value = normalizedMarketValue ?? normalize13FMarketValue(record);
+    figures['Reported market value'] = formatMoneyDisplay(value);
+    figures['SEC reported value basis'] = 'Converted from thousands of dollars';
+  }
+  return figures;
+}
+
+function sanitizeVitalPoint(record = {}, normalizedMarketValue = null) {
+  if (!is13FLikeRecord(record)) return record.vital_point || '';
+  const value = normalizedMarketValue ?? normalize13FMarketValue(record);
+  const filer = record.filer || record.manager_name || 'Institutional manager';
+  const ticker = record.ticker || record.company || 'reported issuer';
+  const shares = toNumber(record.shares, null);
+  const period = record.period_end || record.report_period || record.event_date || 'the reported period';
+  if (shares !== null && Number.isFinite(shares)) {
+    return `13F holding: ${filer} reported ${Math.round(shares).toLocaleString()} shares of ${ticker}, market value ${formatMoneyDisplay(value)}, as of ${period}.`;
+  }
+  return `13F holding: ${filer} reported ${ticker}, market value ${formatMoneyDisplay(value)}, as of ${period}.`;
 }
 
 function ensureArray(value) {
@@ -260,6 +323,10 @@ function normalizeCapitalTraceRecord(record = {}) {
   const recordId = record.record_id || record.id || record.accession_number || [sourceType, filingType, record.ticker, record.filer, record.filed_date, record.event_type].join('|');
   const eventDate = record.event_date || record.transaction_date || record.period_end || record.filed_date || '';
 
+  const normalized13FMarketValue = normalize13FMarketValue(record);
+  const normalizedMarketValue = is13FLikeRecord(record) ? normalized13FMarketValue : toNumber(record.market_value || record.transaction_value || record.estimated_value, 0);
+  const normalizedTransactionValue = is13FLikeRecord(record) ? normalized13FMarketValue : toNumber(record.transaction_value || record.estimated_value || record.market_value, 0);
+
   return {
     id: record.id || recordId,
     record_id: recordId,
@@ -290,8 +357,10 @@ function normalizeCapitalTraceRecord(record = {}) {
     caveat: record.caveat || 'Source record requires additional review before use.',
     source_url: record.source_url || '#',
     transaction_code: record.transaction_code || '',
-    transaction_value: toNumber(record.transaction_value || record.estimated_value || record.market_value, 0),
-    market_value: toNumber(record.market_value || record.transaction_value || record.estimated_value, 0),
+    transaction_value: normalizedTransactionValue,
+    market_value: normalizedMarketValue,
+    reported_market_value_thousands: toNumber(record.reported_market_value_thousands, null),
+    reported_market_value_usd: normalized13FMarketValue,
     shares: toNumber(record.shares || record.proposed_shares || record.beneficial_shares, 0),
     price: toNumber(record.price || record.share_price, 0),
     shares_after: toNumber(record.shares_after || record.ownership_after, 0),
@@ -300,8 +369,8 @@ function normalizeCapitalTraceRecord(record = {}) {
     cusip: record.cusip || '',
     position_rank: record.position_rank || '',
     report_period: record.report_period || record.period_end || '',
-    vital_point: record.vital_point || '',
-    key_figures: record.key_figures || record.figures || {},
+    vital_point: sanitizeVitalPoint(record, normalizedMarketValue),
+    key_figures: sanitizeKeyFigures(record, normalizedMarketValue),
     person_entity: record.person_entity || record.person || record.entity || {},
     source_trust: record.source_trust || record.trust || {},
     extraction_quality: record.extraction_quality || { status: 'minimal', missing_fields: [], parsed_fields: [], notes: [] }

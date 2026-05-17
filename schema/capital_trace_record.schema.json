@@ -1,242 +1,84 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Capital Trace v0.9 Data Payload",
+  "title": "Capital Trace v0.12a Data Payload",
   "type": "object",
-  "required": [
-    "schema_version",
-    "data_mode",
-    "generated_at",
-    "records",
-    "lane_diagnostics"
-  ],
+  "required": ["schema_version", "data_mode", "generated_at", "records", "lane_diagnostics"],
   "properties": {
-    "schema_version": {
-      "type": "string"
-    },
-    "data_mode": {
-      "type": "string"
-    },
-    "generated_at": {
-      "type": "string"
-    },
-    "lookback_days": {
-      "type": "integer"
-    },
-    "records_count": {
-      "type": "integer"
-    },
-    "lane_count": {
-      "type": "integer"
-    },
-    "supported_forms": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
+    "schema_version": {"type": "string"},
+    "data_mode": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "lookback_days": {"type": "integer"},
+    "records_count": {"type": "integer"},
+    "lane_count": {"type": "integer"},
+    "supported_forms": {"type": "array", "items": {"type": "string"}},
+    "counts_by_lane": {"type": "object"},
+    "counts_by_form": {"type": "object"},
+    "extraction_summary": {"type": "object"},
     "lane_diagnostics": {
       "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "required": [
-          "status",
-          "lane",
-          "forms_checked",
-          "companies_checked",
-          "lookback_days",
-          "records_added"
-        ],
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "ok",
-              "checked_no_records",
-              "partial",
-              "failed",
-              "disabled",
-              "stale",
-              "running"
-            ]
-          },
-          "lane": {
-            "type": "string"
-          },
-          "forms_checked": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "companies_checked": {
-            "type": "integer"
-          },
-          "lookback_days": {
-            "type": "integer"
-          },
-          "filings_seen": {
-            "type": "integer"
-          },
-          "filings_matched": {
-            "type": "integer"
-          },
-          "records_added": {
-            "type": "integer"
-          },
-          "errors": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "note": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "metadata": {
-      "type": "object"
+      "additionalProperties": {"type": "object"}
     },
     "records": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "record_id",
-          "ticker",
-          "source_group",
-          "source_type",
-          "filing_type",
-          "record_type",
-          "event_type",
-          "filed_date",
-          "score",
-          "evidence_grade",
-          "actionability",
-          "source_url"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "record_id": {
-            "type": "string"
-          },
-          "ticker": {
-            "type": "string"
-          },
-          "company": {
-            "type": "string"
-          },
-          "source_group": {
-            "type": "string"
-          },
-          "source_type": {
-            "type": "string"
-          },
-          "source_form": {
-            "type": "string"
-          },
-          "filing_type": {
-            "type": "string"
-          },
-          "record_type": {
-            "type": "string"
-          },
-          "event_type": {
-            "type": "string"
-          },
-          "entity_type": {
-            "type": "string"
-          },
-          "filer": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "owner_type": {
-            "type": "string"
-          },
-          "filed_date": {
-            "type": "string"
-          },
-          "event_date": {
-            "type": "string"
-          },
-          "transaction_date": {
-            "type": "string"
-          },
-          "period_end": {
-            "type": "string"
-          },
-          "accession_number": {
-            "type": "string"
-          },
-          "score": {
-            "type": "number"
-          },
-          "evidence_grade": {
-            "type": "string"
-          },
-          "freshness": {
-            "type": "string"
-          },
-          "actionability": {
-            "type": "string"
-          },
-          "watchlist_match": {
-            "type": "boolean"
-          },
-          "rank_reasons": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "does_not_prove": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "caveat": {
-            "type": "string"
-          },
-          "source_url": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "filing_type": {
-      "type": "string"
-    },
-    "broker": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "source_group": {
-      "type": "string"
-    },
-    "vital_point": {
-      "type": "string"
-    },
-    "key_figures": {
-      "type": "object"
-    },
-    "person_entity": {
-      "type": "object"
-    },
-    "source_trust": {
-      "type": "object"
-    },
-    "extraction_quality": {
-      "type": "object"
+      "items": {"$ref": "#/$defs/capitalTraceRecord"}
     }
   },
-  "$comment": "Capital Trace v0.10 normalized public-capital record schema. Supports Form 4, 13D/G, 13F, and Form 144 records."
+  "$defs": {
+    "capitalTraceRecord": {
+      "type": "object",
+      "required": ["record_id", "ticker", "source_group", "source_type", "filing_type", "record_type", "event_type", "filed_date", "score", "evidence_grade", "actionability", "source_url"],
+      "properties": {
+        "id": {"type": "string"},
+        "record_id": {"type": "string"},
+        "ticker": {"type": "string"},
+        "company": {"type": "string"},
+        "source_group": {"type": "string"},
+        "source_type": {"type": "string"},
+        "source_form": {"type": "string"},
+        "filing_type": {"type": "string"},
+        "record_type": {"type": "string"},
+        "event_type": {"type": "string"},
+        "entity_type": {"type": "string"},
+        "filer": {"type": "string"},
+        "role": {"type": "string"},
+        "owner_type": {"type": "string"},
+        "filed_date": {"type": "string"},
+        "event_date": {"type": "string"},
+        "transaction_date": {"type": "string"},
+        "period_end": {"type": "string"},
+        "accession_number": {"type": "string"},
+        "transaction_code": {"type": "string"},
+        "shares": {"type": ["number", "integer", "null"]},
+        "price": {"type": ["number", "integer", "null"]},
+        "transaction_value": {"type": ["number", "integer", "null"]},
+        "market_value": {"type": ["number", "integer", "null"]},
+        "reported_market_value_thousands": {"type": ["number", "integer", "null"]},
+        "reported_market_value_usd": {"type": ["number", "integer", "null"]},
+        "market_value_unit_basis": {"type": "string"},
+        "ownership_percent": {"type": ["number", "integer", "null"]},
+        "broker": {"type": ["string", "null"]},
+        "cusip": {"type": ["string", "null"]},
+        "position_rank": {"type": ["number", "integer", "string", "null"]},
+        "position_weight": {"type": ["number", "integer", "null"]},
+        "manager_name": {"type": "string"},
+        "manager_cik": {"type": "string"},
+        "score": {"type": "number"},
+        "evidence_grade": {"type": "string"},
+        "freshness": {"type": "string"},
+        "actionability": {"type": "string"},
+        "watchlist_match": {"type": "boolean"},
+        "rank_reasons": {"type": "array", "items": {"type": "string"}},
+        "does_not_prove": {"type": "array", "items": {"type": "string"}},
+        "caveat": {"type": "string"},
+        "source_url": {"type": "string"},
+        "vital_point": {"type": "string"},
+        "key_figures": {"type": "object"},
+        "person_entity": {"type": "object"},
+        "source_trust": {"type": "object"},
+        "extraction_quality": {"type": "object"}
+      },
+      "additionalProperties": true
+    }
+  },
+  "$comment": "Capital Trace v0.12a normalized public-capital record schema. Includes explicit 13F market-value unit fields to prevent 1,000x display errors."
 }

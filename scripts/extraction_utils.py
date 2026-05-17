@@ -46,6 +46,37 @@ def fmt_money(value: Any) -> str:
     return f"{sign}${n:,.2f}"
 
 
+
+
+
+def normalize_13f_market_value(record: Dict[str, Any]) -> tuple[Any, List[str]]:
+    """Return the best 13F USD market value plus integrity notes.
+
+    SEC 13F information-table value fields are reported in thousands of dollars.
+    New records should carry reported_market_value_thousands and
+    reported_market_value_usd. This helper also guards older generated records
+    that may have been accidentally scaled by 1,000 twice.
+    """
+    notes: List[str] = []
+    raw_thousands = record.get("reported_market_value_thousands")
+    if present(raw_thousands):
+        raw_num = num(raw_thousands)
+        if raw_num is not None:
+            return int(raw_num * 1000), notes
+    usd_explicit = record.get("reported_market_value_usd")
+    if present(usd_explicit):
+        return usd_explicit, notes
+    value = record.get("market_value") or record.get("transaction_value")
+    n = num(value)
+    if n is not None and n >= 2_000_000_000_000:
+        # A single 13F holding above $2T is far more likely to be a legacy
+        # double-scaling bug than a real holding in the current universe. Keep
+        # the correction visible in extraction notes rather than silently hiding it.
+        notes.append("13F market value looked double-scaled; display normalized down by 1,000.")
+        return n / 1000, notes
+    return value, notes
+
+
 def fmt_price(value: Any) -> str:
     n = num(value)
     if n is None:
@@ -159,10 +190,16 @@ def add_vital_fields(record: Dict[str, Any]) -> Dict[str, Any]:
         notes.append("Form 144 is a notice of proposed sale, not confirmation that the sale occurred.")
     elif "13F" in form or "INSTITUTIONAL" in lane:
         required += ["shares", "market_value", "period_end", "cusip"]
-        value = r.get("market_value") or r.get("transaction_value")
+        value, unit_notes = normalize_13f_market_value(r)
+        notes.extend(unit_notes)
+        if present(r.get("reported_market_value_thousands")):
+            parsed.append("reported_market_value_thousands")
+        if present(value):
+            parsed.append("market_value")
         key_figures = {
             "Reported shares": fmt_number(r.get("shares")),
             "Reported market value": fmt_money(value),
+            "SEC reported value basis": "Converted from thousands of dollars",
             "Report period": str(r.get("period_end") or MISSING_NOT_PARSED),
             "CUSIP": str(r.get("cusip") or MISSING_NOT_PARSED),
             "Position rank": str(r.get("position_rank") or MISSING_NOT_PARSED),

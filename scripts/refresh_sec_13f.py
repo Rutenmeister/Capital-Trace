@@ -204,6 +204,25 @@ def child_text(node: ET.Element, names: set[str]) -> str:
     return ""
 
 
+def normalize_13f_value(value_raw: str) -> tuple[Optional[int], Optional[int]]:
+    """Return (reported_thousands, market_value_usd).
+
+    SEC 13F information-table <value> fields are reported in thousands of dollars.
+    Capital Trace stores both the raw thousands value and the converted USD value
+    so the UI never displays a 1,000x inflated figure.
+    """
+    if not value_raw:
+        return None, None
+    cleaned = str(value_raw).replace(",", "").strip()
+    if not cleaned:
+        return None, None
+    try:
+        reported_thousands = int(float(cleaned))
+    except ValueError:
+        return None, None
+    return reported_thousands, reported_thousands * 1000
+
+
 def parse_13f_holdings(xml_text: str) -> List[Dict[str, Any]]:
     if not xml_text:
         return []
@@ -239,10 +258,7 @@ def parse_13f_holdings(xml_text: str) -> List[Dict[str, Any]]:
         shares_raw = child_text(node, {"sshPrnamt"})
         put_call = child_text(node, {"putCall"})
         investment_discretion = child_text(node, {"investmentDiscretion"})
-        try:
-            market_value = int(float(value_raw.replace(",", "")) * 1000) if value_raw else None
-        except ValueError:
-            market_value = None
+        reported_value_thousands, market_value = normalize_13f_value(value_raw)
         try:
             shares = int(float(shares_raw.replace(",", ""))) if shares_raw else None
         except ValueError:
@@ -252,6 +268,8 @@ def parse_13f_holdings(xml_text: str) -> List[Dict[str, Any]]:
                 "name_of_issuer": name,
                 "title_of_class": title,
                 "cusip": cusip,
+                "reported_market_value_thousands": reported_value_thousands,
+                "reported_market_value_usd": market_value,
                 "market_value": market_value,
                 "shares": shares,
                 "put_call": put_call,
@@ -395,10 +413,14 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
                     "price": None,
                     "transaction_value": market_value,
                     "market_value": market_value,
+                    "reported_market_value_thousands": holding.get("reported_market_value_thousands"),
+                    "reported_market_value_usd": holding.get("reported_market_value_usd"),
+                    "market_value_unit_basis": "SEC 13F value field converted from thousands of dollars",
                     "cusip": holding.get("cusip"),
                     "position_rank": rank,
                     "position_weight": position_weight,
                     "position_value_label": format_money(market_value),
+                    "value_basis_label": "13F value converted from thousands",
                     "change_vs_prior": "Pending comparison",
                     "score": score,
                     "evidence_grade": grade,
