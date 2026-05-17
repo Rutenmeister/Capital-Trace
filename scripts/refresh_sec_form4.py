@@ -38,7 +38,7 @@ OUTPUT_JS = DATA_DIR / "capital_trace_data.js"
 USER_AGENT = os.environ.get("CAPITAL_TRACE_USER_AGENT", "CapitalTrace/0.6 contact@example.com")
 REQUEST_DELAY_SECONDS = float(os.environ.get("CAPITAL_TRACE_REQUEST_DELAY", "0.25"))
 MAX_FORM4_PER_COMPANY = int(os.environ.get("CAPITAL_TRACE_MAX_FORM4_PER_COMPANY", "30"))
-LOOKBACK_DAYS = int(os.environ.get("CAPITAL_TRACE_LOOKBACK_DAYS", "60"))
+LOOKBACK_DAYS = int(os.environ.get("CAPITAL_TRACE_LOOKBACK_DAYS", "180"))
 MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "500"))
 
 SEC_DATA = "https://data.sec.gov"

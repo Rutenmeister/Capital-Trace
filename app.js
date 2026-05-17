@@ -245,7 +245,7 @@ function normalizeMetadata(metadata, source) {
     coverage_lanes: metadata.coverage_lanes || metadata.source_groups || ['SEC Form 4', 'SEC 13D/G Ownership', 'SEC 13F Institutional Holdings', 'SEC Form 144 Proposed Sales'],
     methodology_version: metadata.methodology_version || '0.10',
     lane_diagnostics: metadata.lane_diagnostics || {},
-    lookback_days: metadata.lookback_days || 60,
+    lookback_days: metadata.lookback_days || 180,
     supported_forms: metadata.supported_forms || [],
     counts_by_lane: metadata.counts_by_lane || {},
     counts_by_form: metadata.counts_by_form || {},
@@ -704,7 +704,7 @@ function deriveLaneDiagnostics() {
       status: 'not_reported',
       forms_checked: lane.forms,
       companies_checked: 0,
-      lookback_days: state.metadata.lookback_days || 60,
+      lookback_days: state.metadata.lookback_days || 180,
       records_added: recordCount,
       errors: [],
       note: recordCount > 0

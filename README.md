@@ -120,3 +120,15 @@ Current supported lanes remain watchlist-based, not full SEC universe scanning:
 - SEC Form 144 / 144/A proposed sale notices
 
 Upload note: do not upload the `data/` folder unless intentionally resetting live data. Run the GitHub Action after uploading scripts to regenerate `data/capital_trace.json` with v0.11 extraction fields.
+
+
+## v0.11c — 180-Day Lookback Patch
+
+This patch changes the default SEC filing retrieval lookback from 60 days to 180 days for all current SEC lanes that use the shared lookback setting:
+
+- SEC Form 4 / 4A insider records
+- SEC SC 13D / 13D/A / 13G / 13G/A ownership records
+- SEC 13F-HR / 13F-HR/A institutional holdings records
+- SEC Form 144 / 144/A proposed-sale notices
+
+The frontend Time Window control now defaults to `Last 180 days`. This patch does not include a `data/` folder and should not overwrite live data manually. Run the GitHub Action after upload so `data/capital_trace.json` is regenerated using the 180-day lookback.
