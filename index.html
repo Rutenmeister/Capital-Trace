@@ -17,7 +17,7 @@
           <p class="header-copy">Public records of capital movement, traced to the source. Evidence-ranked research only, not investment advice.</p>
         </div>
         <div class="header-actions">
-          <div class="release-stamp">Capital Trace v0.9 · SEC 13F Institutional Holdings Lane</div>
+          <div class="release-stamp">Capital Trace v0.10 · SEC Form 144 Proposed Sale Lane</div>
           <div class="action-grid">
             <button id="refreshButton" type="button" class="primary-action">Check Now</button>
             <button id="exportButton" type="button" class="chip-button">Download CSV</button>
@@ -101,6 +101,7 @@
               <option value="purchases">Purchases only</option>
               <option value="ownership">Ownership records</option>
               <option value="institutional">Institutional records</option>
+              <option value="proposed_sales">Proposed sale notices</option>
             </select>
           </label>
 
@@ -244,8 +245,8 @@
       </section>
 
       <footer class="glass footer-note">
-        <div><strong>Capital Trace v0.9</strong></div>
-        <div>Universal SEC watchlist prototype. GitHub Actions runs a sequential SEC refresh across Form 4, 13D/G, and 13F lanes, writes lane diagnostics, and updates data/capital_trace.json for the dashboard.</div>
+        <div><strong>Capital Trace v0.10</strong></div>
+        <div>Universal SEC watchlist prototype. GitHub Actions runs a sequential SEC refresh across Form 4, 13D/G, 13F, and Form 144 lanes, writes lane diagnostics, and updates data/capital_trace.json for the dashboard.</div>
       </footer>
     </div>
   </main>

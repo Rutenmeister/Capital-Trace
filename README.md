@@ -1,4 +1,4 @@
-# Capital Trace v0.9 — SEC 13F Institutional Holdings Lane
+# Capital Trace v0.10 — SEC Form 144 Proposed Sale Lane
 
 Capital Trace is an Edgefield research prototype: **public records of capital movement, traced to the source.**
 
@@ -84,3 +84,17 @@ Ctrl + Shift + R
 - `lane_diagnostics` includes `insider_form4`, `ownership_13d_13g`, and `institutional_13f`.
 - The UI shows Form 4, 13D/G, and 13F filing-type support.
 - If 13F finds zero records, the Lane Health panel should say so honestly.
+
+
+## v0.10 notes — Form 144 Proposed Sale Lane
+
+Capital Trace v0.10 adds a watchlist-based SEC Form 144 / 144/A lane. Form 144 is a proposed sale notice, not a confirmed sale. The lane is intentionally caveated and should be used as context until later Form 4 records confirm actual transactions.
+
+Supported lanes after v0.10:
+
+- SEC Form 4 / 4/A insider transaction records
+- SEC SC 13D / 13D/A / 13G / 13G/A ownership threshold records
+- SEC 13F-HR / 13F-HR/A institutional holdings records
+- SEC Form 144 / 144/A proposed sale notices
+
+Upload reminder: do not upload the `data/` folder unless intentionally resetting live data.
