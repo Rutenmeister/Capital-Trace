@@ -1,61 +1,25 @@
-# Capital Trace v0.8 — Universal SEC Filing Engine + Trust Layer
+# Capital Trace v0.9 — SEC 13F Institutional Holdings Lane
 
-Capital Trace is an Edgefield research module: **public records of capital movement, traced to the source**.
+Capital Trace is an Edgefield research prototype: **public records of capital movement, traced to the source.**
 
-This version preserves the working Evidence Queue UI and adds a more professional SEC refresh foundation.
+This version preserves the v0.8 Universal SEC Filing Engine + Trust Layer and adds a third SEC lane:
 
-## Current architecture
+- **SEC Form 4 / 4/A** — insider transactions
+- **SEC SC 13D / 13D/A / 13G / 13G/A** — beneficial ownership / threshold records
+- **SEC 13F-HR / 13F-HR/A** — institutional holdings reports
 
-```text
-SEC watchlist
-  -> universal SEC refresh script
-  -> Form 4 normalizer
-  -> 13D/G ownership normalizer
-  -> normalized Capital Trace records
-  -> lane diagnostics
-  -> data/capital_trace.json
-  -> static dashboard
-```
+## Important integrity notes
 
-## Supported lanes in v0.8
+- The site does **not** call SEC from a visitor's browser.
+- GitHub Actions runs the refresh script and writes `data/capital_trace.json`.
+- The dashboard reads the saved JSON file.
+- 13F data is delayed portfolio context. It does not prove current holdings, shorts, hedges, or manager intent.
+- The 13F lane is manager-watchlist based. It does not scan every 13F manager in the SEC universe.
+- Do not upload the `data/` folder unless intentionally resetting live data.
 
-- **Insider lane**: Form 4 / 4/A
-- **Ownership lane**: SC 13D, SC 13D/A, SC 13G, SC 13G/A
+## Upload files
 
-The system remains **watchlist-based**. It does not scan the entire SEC universe.
-
-## Lookback
-
-Default lookback is **60 days**. The GitHub Action passes:
-
-```text
-CAPITAL_TRACE_LOOKBACK_DAYS=60
-```
-
-The frontend also includes a time-window filter:
-
-- All loaded records
-- Last 7 days
-- Last 30 days
-- Last 60 days
-- Last 90 days
-
-## Trust layer
-
-The generated JSON now includes `lane_diagnostics`, so the UI can say honestly:
-
-- what lane ran
-- what forms were checked
-- how many companies were checked
-- how many filings were seen/matched
-- how many records were added
-- whether a lane found no records or failed
-
-No fake records should be created. If a lane finds zero records, the UI should say so.
-
-## Upload guidance
-
-For normal code updates, upload these files only:
+Upload these files/folders from the unzipped package:
 
 ```text
 index.html
@@ -66,25 +30,57 @@ schema/capital_trace_record.schema.json
 scripts/refresh_capital_trace.py
 scripts/refresh_sec_form4.py
 scripts/refresh_sec_ownership.py
+scripts/refresh_sec_13f.py
 .github/workflows/refresh-capital-trace.yml
 ```
 
-Do **not** upload the `data/` folder unless intentionally resetting live data.
-
-## GitHub Action
-
-The workflow runs:
+If `.github` is hidden on your computer, manually edit this file in GitHub:
 
 ```text
-python scripts/refresh_capital_trace.py
+.github/workflows/refresh-capital-trace.yml
 ```
 
-The script runs lanes sequentially and commits once at the end.
+The workflow should run:
 
-## Integrity rules
+```yaml
+run: python scripts/refresh_capital_trace.py
+```
 
-- Do not fabricate missing filings.
-- Do not label a 13D record as activist unless the source clearly supports it.
-- If a lane fails, report it in diagnostics.
-- If no new records are produced and previous live records exist, preserve the previous live records instead of overwriting with an empty file.
-- Website users load the saved JSON; their browser does not directly call SEC.
+## Optional 13F manager watchlist
+
+The 13F lane has a conservative built-in fallback manager list. To customize it later, create:
+
+```text
+data/institutional_watchlist.json
+```
+
+Example:
+
+```json
+[
+  { "name": "Berkshire Hathaway Inc", "cik": "0001067983" },
+  { "name": "Renaissance Technologies LLC", "cik": "0001037389" }
+]
+```
+
+## After upload
+
+Run:
+
+```text
+Actions → Refresh Capital Trace → Run workflow
+```
+
+Then open the live site and hard refresh:
+
+```text
+Ctrl + Shift + R
+```
+
+## Success criteria
+
+- GitHub Action finishes green.
+- `data/capital_trace.json` shows `schema_version: 0.9`.
+- `lane_diagnostics` includes `insider_form4`, `ownership_13d_13g`, and `institutional_13f`.
+- The UI shows Form 4, 13D/G, and 13F filing-type support.
+- If 13F finds zero records, the Lane Health panel should say so honestly.

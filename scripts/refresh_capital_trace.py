@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.8 master refresh.
+Capital Trace v0.9 master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -8,9 +8,10 @@ Universal SEC filing engine + trust layer:
 - writes diagnostics so the UI can say what was checked, found, or failed
 - commits one combined data/capital_trace.json payload
 
-Supported watchlist lanes in v0.8:
+Supported watchlist lanes in v0.9:
 - Form 4 / 4/A insider transactions
 - SC 13D, SC 13D/A, SC 13G, SC 13G/A beneficial ownership records
+- 13F-HR / 13F-HR/A institutional holdings records
 
 This stays watchlist-based. It does not scan the entire SEC universe.
 """
@@ -34,9 +35,10 @@ from refresh_sec_form4 import (
     collect_form4_records,
 )
 from refresh_sec_ownership import collect_ownership_records
+from refresh_sec_13f import collect_13f_records
 
-MAX_OUTPUT_RECORDS = 500
-SUPPORTED_FORMS = ["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"]
+MAX_OUTPUT_RECORDS = 650
+SUPPORTED_FORMS = ["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "13F-HR", "13F-HR/A"]
 
 
 def base_diag(*, lane: str, forms: List[str], lookback_days: int = LOOKBACK_DAYS) -> Dict[str, Any]:
@@ -131,7 +133,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     counts_by_form = filing_type_counts(records)
 
     payload = {
-        "schema_version": "0.8",
+        "schema_version": "0.9",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -141,7 +143,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.8",
+            "schema_version": "0.9",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
             "refresh_frequency": "hourly",
@@ -150,7 +152,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "last_sec_check": timestamp,
             "next_scheduled_check": next_hour_iso(),
             "source_groups": source_groups,
-            "coverage_lanes": ["SEC Form 4", "SEC 13D/G Ownership"],
+            "coverage_lanes": ["SEC Form 4", "SEC 13D/G Ownership", "SEC 13F Institutional Holdings"],
             "watchlist_count": len(companies),
             "record_count": len(records),
             "records_count": len(records),
@@ -160,7 +162,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "counts_by_lane": counts_by_lane,
             "counts_by_form": counts_by_form,
             "preserved_previous_records": preserved_previous_records,
-            "methodology_version": "0.8-universal-sec-filing-engine-trust-layer",
+            "methodology_version": "0.9-sec-13f-institutional-holdings-lane",
         },
         "records": records,
     }
@@ -197,19 +199,22 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.8 universal SEC refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.9 universal SEC refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])
+    institutional_diag = base_diag(lane="institutional", forms=["13F-HR", "13F-HR/A"])
 
     form4_records, form4_diag = run_lane("SEC Form 4", collect_form4_records, companies, form4_diag)
     ownership_records, ownership_diag = run_lane("SEC 13D/G Ownership", collect_ownership_records, companies, ownership_diag)
+    institutional_records, institutional_diag = run_lane("SEC 13F Institutional Holdings", collect_13f_records, companies, institutional_diag)
 
     diagnostics = {
         "insider_form4": form4_diag,
         "ownership_13d_13g": ownership_diag,
+        "institutional_13f": institutional_diag,
     }
-    write_outputs(form4_records + ownership_records, companies, diagnostics)
+    write_outputs(form4_records + ownership_records + institutional_records, companies, diagnostics)
     return 0
 
 

@@ -629,3 +629,12 @@ td a { color: var(--teal); }
 .control-block select#timeWindowFilter {
   width: 100%;
 }
+
+/* =========================================================
+   CAPITAL TRACE v0.9 INSTITUTIONAL 13F LANE PATCH
+========================================================= */
+.lane-institutional {
+  color: #dbeafe !important;
+  border-color: rgba(96,165,250,.38) !important;
+  background: rgba(96,165,250,.10) !important;
+}

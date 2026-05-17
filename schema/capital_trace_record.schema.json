@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Capital Trace v0.8 Data Payload",
+  "title": "Capital Trace v0.9 Data Payload",
   "type": "object",
   "required": ["schema_version", "data_mode", "generated_at", "records", "lane_diagnostics"],
   "properties": {

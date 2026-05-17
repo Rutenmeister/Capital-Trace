@@ -234,6 +234,7 @@ function normalizeFilingType(value = '') {
   if (upper.includes('13G/A')) return 'SC 13G/A';
   if (upper.includes('13D')) return 'SC 13D';
   if (upper.includes('13G')) return 'SC 13G';
+  if (upper.includes('13F-HR/A')) return '13F-HR/A';
   if (upper.includes('13F-HR')) return '13F-HR';
   return raw.replace(/^SEC\s+/i, '').replace(/^Schedule\s+/i, 'SC ');
 }
@@ -275,6 +276,15 @@ function isOwnership(record) {
   return group.includes('ownership threshold') || type.includes('ownership threshold') || source.includes('13d') || source.includes('13g');
 }
 
+
+function isInstitutional(record) {
+  const group = String(record.source_group || '').toLowerCase();
+  const type = String(record.record_type || '').toLowerCase();
+  const source = String(record.source_type || '').toLowerCase();
+  const form = String(record.filing_type || record.source_form || '').toLowerCase();
+  return group.includes('institutional') || type.includes('institutional') || source.includes('13f') || form.includes('13f');
+}
+
 function isAdministrative(record) {
   const code = String(record.transaction_code || '').toUpperCase();
   const event = String(record.event_type || '').toLowerCase();
@@ -287,7 +297,10 @@ function recalibrateRecord(record) {
   let adjustedScore = originalScore;
   const role = roleShort(next.role);
 
-  if (isOwnership(next)) {
+  if (isInstitutional(next)) {
+    // 13F records are delayed institutional context; do not run insider transaction logic.
+    adjustedScore = originalScore;
+  } else if (isOwnership(next)) {
     // Do not force ownership records into insider purchase/sale logic.
     adjustedScore = originalScore;
   } else if (isPurchase(next)) {
@@ -303,7 +316,13 @@ function recalibrateRecord(record) {
 
   next.score = Math.max(0, Math.min(100, Math.round(adjustedScore)));
 
-  if (isOwnership(next) && next.score >= 84 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
+  if (isInstitutional(next) && next.score >= 72) {
+    next.actionability = 'Watch';
+  } else if (isInstitutional(next) && next.score >= 45) {
+    next.actionability = 'Context Only';
+  } else if (isInstitutional(next)) {
+    next.actionability = 'Low Signal';
+  } else if (isOwnership(next) && next.score >= 84 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
     next.actionability = 'Research Now';
   } else if (isOwnership(next) && next.score >= 62) {
     next.actionability = 'Watch';
@@ -414,7 +433,7 @@ function populateFilingTypeFilter() {
     : [];
   const allTypes = new Set([...supported, ...counts.keys()]);
   const filingTypes = [...allTypes].filter(Boolean).sort((a, b) => {
-    const order = ['Form 4', 'Form 4/A', 'SC 13D', 'SC 13D/A', 'SC 13G', 'SC 13G/A', '13F-HR', 'Unknown'];
+    const order = ['Form 4', 'Form 4/A', 'SC 13D', 'SC 13D/A', 'SC 13G', 'SC 13G/A', '13F-HR', '13F-HR/A', 'Unknown'];
     const ai = order.indexOf(a);
     const bi = order.indexOf(b);
     if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
@@ -494,6 +513,7 @@ function applyFilters() {
     if (hideLowSignal && record.actionability === 'Low Signal') return false;
     if (selectedFocus === 'purchases' && !isPurchase(record)) return false;
     if (selectedFocus === 'ownership' && !isOwnership(record)) return false;
+    if (selectedFocus === 'institutional' && !isInstitutional(record)) return false;
     return true;
   });
 
@@ -514,6 +534,7 @@ function updateBrief() {
   const purchases = state.records.filter(isPurchase).length;
   const sales = state.records.filter(isSale).length;
   const ownership = state.records.filter(isOwnership).length;
+  const institutional = state.records.filter(isInstitutional).length;
   const filingTypeCount = new Set(state.records.map((record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type))).size;
   const refreshed = state.metadata.last_refreshed || 'Sample data';
   const top = state.records[0];
@@ -528,7 +549,7 @@ function updateBrief() {
   els.readoutContext.textContent = context;
   els.readoutHidden.textContent = lowSignal;
   els.briefTitle.textContent = `${researchNow} high-signal record${researchNow === 1 ? '' : 's'}`;
-  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Low-signal records can stay hidden by default.`;
+  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${institutional} institutional records, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Low-signal records can stay hidden by default.`;
 
   if (els.lastSecCheck) els.lastSecCheck.textContent = formatDate(state.metadata.last_sec_check, true);
   if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
@@ -614,9 +635,11 @@ function activeEmptyStateMessage(defaultMessage) {
 function diagnosticSummaryText() {
   const diagnostics = state.metadata.lane_diagnostics || {};
   const ownership = diagnostics.ownership_13d_13g;
-  if (ownership) {
-    return `Ownership lane status: ${laneStatusLabel(ownership.status)}; checked ${ownership.companies_checked || 0} companies over ${ownership.lookback_days || state.metadata.lookback_days || '?'} days; records added: ${ownership.records_added || 0}.`;
-  }
+  const institutional = diagnostics.institutional_13f;
+  const parts = [];
+  if (ownership) parts.push(`Ownership lane: ${laneStatusLabel(ownership.status)}, ${ownership.records_added || 0} records`);
+  if (institutional) parts.push(`13F lane: ${laneStatusLabel(institutional.status)}, ${institutional.records_added || 0} records`);
+  if (parts.length) return parts.join('; ') + '.';
   return 'No lane diagnostics are available in this data file.';
 }
 
@@ -644,8 +667,8 @@ function createCard(record, expanded = false) {
 
   const lanePill = node.querySelector('.lane-pill');
   if (lanePill) {
-    lanePill.textContent = isOwnership(record) ? 'Ownership' : String(record.source_group || 'Source').replace(/^SEC\s+/i, '');
-    lanePill.classList.add(isOwnership(record) ? 'lane-ownership' : 'lane-insider');
+    lanePill.textContent = isInstitutional(record) ? 'Institutional' : isOwnership(record) ? 'Ownership' : String(record.source_group || 'Source').replace(/^SEC\s+/i, '');
+    lanePill.classList.add(isInstitutional(record) ? 'lane-institutional' : isOwnership(record) ? 'lane-ownership' : 'lane-insider');
   }
   const filingPill = node.querySelector('.filing-pill');
   if (filingPill) filingPill.textContent = record.filing_type || normalizeFilingType(record.source_form || record.source_type);
