@@ -38,6 +38,7 @@ from refresh_sec_form4 import (
 from refresh_sec_ownership import collect_ownership_records
 from refresh_sec_13f import collect_13f_records
 from refresh_sec_144 import collect_form144_records
+from extraction_utils import postprocess_records, extraction_summary
 
 MAX_OUTPUT_RECORDS = 650
 SUPPORTED_FORMS = ["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "13F-HR", "13F-HR/A", "144", "144/A"]
@@ -118,7 +119,7 @@ def filing_type_counts(records: List[Dict[str, Any]]) -> Dict[str, int]:
 
 
 def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagnostics: Dict[str, Any]) -> None:
-    records = dedupe(records)
+    records = postprocess_records(dedupe(records))
     records = sorted(records, key=lambda r: (int(r.get("score") or 0), str(r.get("filed_date") or "")), reverse=True)[:MAX_OUTPUT_RECORDS]
     previous = load_previous_payload()
 
@@ -135,7 +136,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     counts_by_form = filing_type_counts(records)
 
     payload = {
-        "schema_version": "0.10",
+        "schema_version": "0.11",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -145,7 +146,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.10",
+            "schema_version": "0.11",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
             "refresh_frequency": "hourly",
@@ -164,7 +165,8 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "counts_by_lane": counts_by_lane,
             "counts_by_form": counts_by_form,
             "preserved_previous_records": preserved_previous_records,
-            "methodology_version": "0.10-sec-form-144-proposed-sale-lane",
+            "methodology_version": "0.11-filing-extraction-audit-vital-point-layer",
+            "extraction_summary": extraction_summary(records),
         },
         "records": records,
     }
@@ -201,7 +203,7 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.10 universal SEC refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.11 extraction audit refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])

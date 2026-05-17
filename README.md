@@ -1,4 +1,4 @@
-# Capital Trace v0.10a — SEC Form 144 Proposed Sale Lane
+# Capital Trace v0.11a — SEC Form 144 Proposed Sale Lane
 
 Capital Trace is an Edgefield research prototype: **public records of capital movement, traced to the source.**
 
@@ -88,7 +88,7 @@ Ctrl + Shift + R
 
 ## v0.10 notes — Form 144 Proposed Sale Lane
 
-Capital Trace v0.10a adds a watchlist-based SEC Form 144 / 144/A lane. Form 144 is a proposed sale notice, not a confirmed sale. The lane is intentionally caveated and should be used as context until later Form 4 records confirm actual transactions.
+Capital Trace v0.11a adds a watchlist-based SEC Form 144 / 144/A lane. Form 144 is a proposed sale notice, not a confirmed sale. The lane is intentionally caveated and should be used as context until later Form 4 records confirm actual transactions.
 
 Supported lanes after v0.10:
 
@@ -98,3 +98,25 @@ Supported lanes after v0.10:
 - SEC Form 144 / 144/A proposed sale notices
 
 Upload reminder: do not upload the `data/` folder unless intentionally resetting live data.
+
+
+## v0.11 — Filing Extraction Audit + Vital Point Layer
+
+This version keeps the universal SEC filing engine and adds a stronger extraction layer across all current lanes. It does not fabricate figures. When a figure is absent or cannot be parsed, the UI labels it as `Not disclosed / not parsed`.
+
+Added fields per normalized record include:
+
+- `vital_point` — one clear sentence stating the useful core of the record.
+- `key_figures` — shares, price, market value, ownership percent, report period, CUSIP, broker, or other relevant numeric fields.
+- `person_entity` — filer, reporting person, manager, seller, role, or relationship.
+- `source_trust` — filing type, lane, filed date, event/report date, accession, and source context.
+- `extraction_quality` — `complete`, `partial`, `minimal`, or `failed`, with parsed/missing fields.
+
+Current supported lanes remain watchlist-based, not full SEC universe scanning:
+
+- SEC Form 4 / 4/A insider records
+- SEC SC 13D / 13D/A / 13G / 13G/A ownership records
+- SEC 13F-HR / 13F-HR/A institutional holdings
+- SEC Form 144 / 144/A proposed sale notices
+
+Upload note: do not upload the `data/` folder unless intentionally resetting live data. Run the GitHub Action after uploading scripts to regenerate `data/capital_trace.json` with v0.11 extraction fields.

@@ -17,7 +17,7 @@
           <p class="header-copy">Public records of capital movement, traced to the source. Evidence-ranked research only, not investment advice.</p>
         </div>
         <div class="header-actions">
-          <div class="release-stamp">Capital Trace v0.10aa · Lane Health Visibility Patch</div>
+          <div class="release-stamp">Capital Trace v0.11 · Extraction Audit + Vital Point Layer</div>
           <div class="action-grid">
             <button id="refreshButton" type="button" class="primary-action">Check Now</button>
             <button id="exportButton" type="button" class="chip-button">Download CSV</button>
@@ -79,6 +79,17 @@
             <select id="displayModeFilter">
               <option value="filter">Filter records</option>
               <option value="highlight">Highlight matches</option>
+            </select>
+          </label>
+
+          <label class="control-block">
+            <span class="tiny-label">Extraction quality</span>
+            <select id="extractionFilter">
+              <option value="all">All extraction quality</option>
+              <option value="complete">Complete</option>
+              <option value="partial">Partial</option>
+              <option value="minimal">Minimal</option>
+              <option value="failed">Failed</option>
             </select>
           </label>
 
@@ -240,13 +251,14 @@
             <article class="soft-card"><div class="tiny-label">Evidence Grade</div><p>A-grade records are direct, recent, exact, and source-linked. Lower grades indicate delay, ambiguity, administrative noise, or weaker signal value.</p></article>
             <article class="soft-card"><div class="tiny-label">Actionability</div><p>Actionability is a research label, not investment advice. It compresses the record into Research Now, Watch, Context Only, or Low Signal.</p></article>
             <article class="soft-card"><div class="tiny-label">Lane diagnostics</div><p>Each refresh reports what forms were checked, the lookback window, records added, holdings parsed, and whether a lane found no records or failed.</p></article>
+            <article class="soft-card"><div class="tiny-label">Extraction Quality</div><p>Each record is labeled complete, partial, minimal, or failed based on which economic fields were actually parsed. Missing values are shown honestly instead of guessed.</p></article>
           </div>
         </details>
       </section>
 
       <footer class="glass footer-note">
-        <div><strong>Capital Trace v0.10aa</strong></div>
-        <div>Universal SEC watchlist prototype. GitHub Actions runs a sequential SEC refresh across Form 4, 13D/G, 13F, and Form 144 lanes, writes lane diagnostics, and updates data/capital_trace.json for the dashboard.</div>
+        <div><strong>Capital Trace v0.11</strong></div>
+        <div>Universal SEC watchlist prototype. GitHub Actions runs a sequential SEC refresh across Form 4, 13D/G, 13F, and Form 144 lanes, writes lane diagnostics, extraction quality, vital points, and updates data/capital_trace.json for the dashboard.</div>
       </footer>
     </div>
   </main>
@@ -273,11 +285,18 @@
         <span class="expand-indicator">Expand</span>
       </button>
       <div class="record-details">
+        <p class="vital-point"></p>
         <dl class="record-meta">
           <div><dt>Filer</dt><dd class="filer"></dd></div>
           <div><dt>Source</dt><dd class="source"></dd></div>
           <div><dt>Filed</dt><dd class="filed"></dd></div>
+          <div><dt>Extraction</dt><dd class="extraction-status"></dd></div>
         </dl>
+        <div class="figures-grid">
+          <div class="figure-panel"><h4>Key figures</h4><dl class="key-figures"></dl></div>
+          <div class="figure-panel"><h4>Person / entity</h4><dl class="person-entity"></dl></div>
+          <div class="figure-panel"><h4>Source / trust</h4><dl class="source-trust"></dl></div>
+        </div>
         <div class="why-block">
           <h4>Why it ranked</h4>
           <ul class="rank-reasons"></ul>

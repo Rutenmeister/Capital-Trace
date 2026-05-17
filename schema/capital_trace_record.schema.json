@@ -221,6 +221,21 @@
     },
     "source_group": {
       "type": "string"
+    },
+    "vital_point": {
+      "type": "string"
+    },
+    "key_figures": {
+      "type": "object"
+    },
+    "person_entity": {
+      "type": "object"
+    },
+    "source_trust": {
+      "type": "object"
+    },
+    "extraction_quality": {
+      "type": "object"
     }
   },
   "$comment": "Capital Trace v0.10 normalized public-capital record schema. Supports Form 4, 13D/G, 13F, and Form 144 records."

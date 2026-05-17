@@ -498,6 +498,7 @@ def parse_form4(company: Company, filing: Dict[str, Any]) -> List[Dict[str, Any]
             ],
             "caveat": caveat,
             "source_url": source_url,
+            "vital_point": (f"{event_type}: {owner_name} ({role}) reported {shares:,.0f} shares at ${price:,.2f}, estimated value ${value:,.0f}." if value is not None and shares is not None and price is not None else f"{event_type}: {owner_name} ({role}) Form 4 record; key price/value fields require source review."),
         })
     return records
 

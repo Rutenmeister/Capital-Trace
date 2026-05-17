@@ -224,6 +224,24 @@ def infer_percent_owned(text: str) -> Optional[float]:
     return None
 
 
+
+def infer_beneficial_shares(text: str) -> Optional[float]:
+    plain = compact_text(text)
+    patterns = [
+        r"Aggregate Amount Beneficially Owned by Each Reporting Person\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
+        r"amount beneficially owned.*?([0-9,]+(?:\.[0-9]+)?)\s+(?:shares|share)",
+        r"beneficially owned\s+([0-9,]+(?:\.[0-9]+)?)\s+(?:shares|share)",
+        r"sole voting power\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, plain, flags=re.I)
+        if m:
+            try:
+                return float(m.group(1).replace(',', ''))
+            except ValueError:
+                return None
+    return None
+
 def score_ownership(form: str, filed_date: str, percent_owned: Optional[float], matched_watchlist: bool) -> Tuple[int, str, str, str, List[str], str]:
     form_u = form.upper()
     is_13d = "13D" in form_u
@@ -255,6 +273,9 @@ def score_ownership(form: str, filed_date: str, percent_owned: Optional[float], 
     else:
         score -= 4
         reasons.append("Ownership percentage not extracted automatically; source review required")
+
+    # Beneficial share amount is not always easy to extract from HTML, but include it when available.
+    # The universal extraction layer will label the field as missing rather than guessing if absent.
 
     filed_dt = parse_date(filed_date)
     age_days = (now_utc() - filed_dt).days if filed_dt else 999
@@ -297,6 +318,7 @@ def parse_ownership_record(company: Company, filing: Dict[str, Any]) -> Optional
     issuer = infer_issuer_name(text, company.ticker)
     owner = infer_owner_name(text)
     percent_owned = infer_percent_owned(text)
+    beneficial_shares = infer_beneficial_shares(text)
     filed_date = filing.get("filing_date") or filing.get("report_date") or ""
     score, grade, freshness, action, reasons, caveat = score_ownership(
         form=form,
@@ -335,7 +357,7 @@ def parse_ownership_record(company: Company, filing: Dict[str, Any]) -> Optional
         "period_end": filing.get("report_date") or "",
         "accession_number": accession,
         "transaction_code": "",
-        "shares": None,
+        "shares": beneficial_shares,
         "price": None,
         "transaction_value": None,
         "ownership_percent": percent_owned,

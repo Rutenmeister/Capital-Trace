@@ -1,4 +1,5 @@
 const DASHBOARD_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const EXTRACTION_ORDER = ['complete', 'partial', 'minimal', 'failed'];
 
 const state = {
   records: [],
@@ -18,6 +19,7 @@ const els = {
   filingTypeFilter: document.querySelector('#filingTypeFilter'),
   timeWindowFilter: document.querySelector('#timeWindowFilter'),
   displayModeFilter: document.querySelector('#displayModeFilter'),
+  extractionFilter: document.querySelector('#extractionFilter'),
   actionFilter: document.querySelector('#actionFilter'),
   focusFilter: document.querySelector('#focusFilter'),
   minScore: document.querySelector('#minScore'),
@@ -502,6 +504,7 @@ function applyFilters() {
   const selectedFilingType = els.filingTypeFilter ? els.filingTypeFilter.value : 'all';
   const selectedTimeWindow = els.timeWindowFilter ? els.timeWindowFilter.value : 'all';
   const displayMode = els.displayModeFilter ? els.displayModeFilter.value : 'filter';
+  const selectedExtraction = els.extractionFilter ? els.extractionFilter.value : 'all';
   const selectedAction = els.actionFilter.value;
   const selectedFocus = els.focusFilter ? els.focusFilter.value : 'all';
   const minimumScore = Number(els.minScore.value || 0);
@@ -530,6 +533,7 @@ function applyFilters() {
     if (selectedSource !== 'all' && (record.source_group || record.source_type) !== selectedSource) return false;
     if (selectedFilingType !== 'all' && displayMode === 'filter' && (record.filing_type || normalizeFilingType(record.source_form || record.source_type)) !== selectedFilingType) return false;
     if (!recordWithinWindow(record, selectedTimeWindow)) return false;
+    if (selectedExtraction !== 'all' && String((record.extraction_quality || {}).status || '').toLowerCase() !== selectedExtraction) return false;
     if (selectedAction !== 'all' && record.actionability !== selectedAction) return false;
     if (Number(record.score || 0) < minimumScore) return false;
     if (watchlistOnly && !record.watchlist_match) return false;
@@ -561,6 +565,7 @@ function updateBrief() {
   const institutional = state.records.filter(isInstitutional).length;
   const proposedSales = state.records.filter(isProposedSale).length;
   const filingTypeCount = new Set(state.records.map((record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type))).size;
+  const extractionCounts = Object.fromEntries(countBy(state.records, (record) => String((record.extraction_quality || {}).status || 'minimal')).entries());
   const refreshed = state.metadata.last_refreshed || 'Sample data';
   const top = state.records[0];
   const topLane = top ? top.event_type : '-';
@@ -574,7 +579,7 @@ function updateBrief() {
   els.readoutContext.textContent = context;
   els.readoutHidden.textContent = lowSignal;
   els.briefTitle.textContent = `${researchNow} high-signal record${researchNow === 1 ? '' : 's'}`;
-  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${institutional} institutional records, ${proposedSales} proposed-sale notices, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Low-signal records can stay hidden by default.`;
+  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${institutional} institutional records, ${proposedSales} proposed-sale notices, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Extraction: ${Object.entries(extractionCounts).map(([k, v]) => `${k} ${v}`).join(', ')}. Low-signal records can stay hidden by default.`;
 
   if (els.lastSecCheck) els.lastSecCheck.textContent = formatDate(state.metadata.last_sec_check, true);
   if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
@@ -714,6 +719,19 @@ function renderCards(container, records, emptyMessage, openFirst = false) {
   });
 }
 
+function renderDl(dl, obj) {
+  if (!dl) return;
+  const entries = Object.entries(obj || {}).filter(([_, value]) => value !== undefined && value !== null && value !== '');
+  dl.innerHTML = entries.length ? entries.map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join('') : '<div><dt>Status</dt><dd>Not disclosed / not parsed</dd></div>';
+}
+
+function extractionLabel(record) {
+  const q = record.extraction_quality || {};
+  const status = String(q.status || 'minimal');
+  const missing = Array.isArray(q.missing_fields) ? q.missing_fields.length : 0;
+  return `${status.charAt(0).toUpperCase()}${status.slice(1)}${missing ? ` · ${missing} missing` : ''}`;
+}
+
 function createCard(record, expanded = false) {
   const node = els.template.content.firstElementChild.cloneNode(true);
   if (recordMatchesHighlight(record)) node.classList.add('highlight-match');
@@ -745,6 +763,13 @@ function createCard(record, expanded = false) {
   node.querySelector('.filer').textContent = record.filer;
   node.querySelector('.source').textContent = record.source_type || record.source_form;
   node.querySelector('.filed').textContent = formatDate(record.filed_date);
+  const vital = node.querySelector('.vital-point');
+  if (vital) vital.textContent = record.vital_point || `${record.event_type || 'Record'} for ${record.ticker || '-'}.`;
+  const extractionStatus = node.querySelector('.extraction-status');
+  if (extractionStatus) extractionStatus.textContent = extractionLabel(record);
+  renderDl(node.querySelector('.key-figures'), record.key_figures);
+  renderDl(node.querySelector('.person-entity'), record.person_entity);
+  renderDl(node.querySelector('.source-trust'), record.source_trust);
   node.querySelector('.caveat').textContent = record.caveat;
   node.querySelector('.method-line').textContent = methodologyLine(record);
 
@@ -815,6 +840,7 @@ function renderTable() {
       <td>${record.score}</td>
       <td>${escapeHtml(record.evidence_grade)}</td>
       <td>${escapeHtml(record.actionability)}<div class="table-sub">${escapeHtml(record.freshness)}</div></td>
+      <td>${escapeHtml(extractionLabel(record))}</td>
       <td>${formatDate(record.filed_date)}</td>
       <td><a href="${record.source_url}" target="_blank" rel="noopener noreferrer">Source</a></td>
     </tr>
@@ -831,6 +857,7 @@ function renderTable() {
           <th>Score</th>
           <th>Grade</th>
           <th>Action</th>
+          <th>Extraction</th>
           <th>Filed</th>
           <th>Link</th>
         </tr>
@@ -841,10 +868,10 @@ function renderTable() {
 }
 
 function exportCsv() {
-  const headers = ['record_id','ticker','company','source_group','source_type','event_type','record_type','entity_type','filer','role','owner_type','filed_date','event_date','period_end','accession_number','score','evidence_grade','freshness','actionability','caveat','source_url'];
+  const headers = ['record_id','ticker','company','source_group','source_type','filing_type','event_type','vital_point','record_type','entity_type','filer','role','owner_type','shares','price','transaction_value','market_value','ownership_percent','filed_date','event_date','period_end','accession_number','score','evidence_grade','freshness','actionability','extraction_status','caveat','source_url'];
   const lines = [headers.join(',')];
   for (const record of state.filtered) {
-    lines.push(headers.map((header) => csvCell(record[header])).join(','));
+    lines.push(headers.map((header) => csvCell(header === 'extraction_status' ? ((record.extraction_quality || {}).status || '') : record[header])).join(','));
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
