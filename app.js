@@ -78,6 +78,7 @@ const els = {
   sourceCoverage: document.querySelector('#sourceCoverage'),
   laneHealth: document.querySelector('#laneHealth'),
   traceBrief: document.querySelector('#traceBrief'),
+  extractionHealth: document.querySelector('#extractionHealth'),
   template: document.querySelector('#recordCardTemplate'),
 };
 
@@ -290,8 +291,15 @@ function normalizeCapitalTraceRecord(record = {}) {
     source_url: record.source_url || '#',
     transaction_code: record.transaction_code || '',
     transaction_value: toNumber(record.transaction_value || record.estimated_value || record.market_value, 0),
-    shares: toNumber(record.shares || record.proposed_shares, 0),
+    market_value: toNumber(record.market_value || record.transaction_value || record.estimated_value, 0),
+    shares: toNumber(record.shares || record.proposed_shares || record.beneficial_shares, 0),
     price: toNumber(record.price || record.share_price, 0),
+    shares_after: toNumber(record.shares_after || record.ownership_after, 0),
+    ownership_percent: toNumber(record.ownership_percent, null),
+    broker: record.broker || '',
+    cusip: record.cusip || '',
+    position_rank: record.position_rank || '',
+    report_period: record.report_period || record.period_end || '',
     vital_point: record.vital_point || '',
     key_figures: record.key_figures || record.figures || {},
     person_entity: record.person_entity || record.person || record.entity || {},
@@ -627,7 +635,28 @@ function applyFilters() {
     state.filtered = state.filtered.slice().sort((a, b) => b.score - a.score).slice(0, 10);
   }
 
+  if (selectedFocus === 'top_vital') {
+    state.filtered = state.filtered
+      .filter((record) => topVitalScore(record) >= 55)
+      .sort((a, b) => topVitalScore(b) - topVitalScore(a))
+      .slice(0, 20);
+  }
+
   renderAll();
+}
+
+function topVitalScore(record) {
+  let score = Number(record.score || 0);
+  const status = String((record.extraction_quality || {}).status || 'minimal').toLowerCase();
+  if (status === 'complete') score += 18;
+  else if (status === 'partial') score += 10;
+  else if (status === 'minimal') score -= 8;
+  else if (status === 'failed') score -= 20;
+  if (record.transaction_value || record.market_value || record.ownership_percent) score += 8;
+  if (isPurchase(record) || isOwnership(record) || isInstitutional(record) || isProposedSale(record)) score += 3;
+  if (record.actionability === 'Research Now') score += 8;
+  if (record.actionability === 'Low Signal') score -= 15;
+  return score;
 }
 
 function updateBrief() {
@@ -668,6 +697,7 @@ function updateBrief() {
   }
   renderLaneHealth();
   renderTraceBrief();
+  renderExtractionHealth();
 }
 
 function laneStatusLabel(status) {
@@ -810,11 +840,26 @@ function extractionLabel(record) {
   return `${status.charAt(0).toUpperCase()}${status.slice(1)}${missing ? ` · ${missing} missing` : ''}`;
 }
 
+
+function renderExtractionHealth() {
+  if (!els.extractionHealth) return;
+  const counts = Object.fromEntries(countBy(state.records, (record) => String((record.extraction_quality || {}).status || 'minimal').toLowerCase()).entries());
+  const order = ['complete', 'partial', 'minimal', 'failed'];
+  const rows = order.map((key) => `${key}: ${counts[key] || 0}`).join('<br>');
+  const missingValue = state.records.filter((record) => {
+    const q = record.extraction_quality || {};
+    const missing = Array.isArray(q.missing_fields) ? q.missing_fields.join(' ').toLowerCase() : '';
+    return missing.includes('value') || missing.includes('price') || missing.includes('ownership_percent') || missing.includes('shares');
+  }).length;
+  els.extractionHealth.innerHTML = `<p>${rows}</p><p class="mini-list">Records missing at least one vital figure: ${missingValue}</p>`;
+}
+
 function createCard(record, expanded = false) {
   if (!els.template || !els.template.content || !els.template.content.firstElementChild) return createFallbackCard(record);
   const node = els.template.content.firstElementChild.cloneNode(true);
   const q = (sel) => node.querySelector(sel);
   if (recordMatchesHighlight(record)) node.classList.add('highlight-match');
+  node.classList.add(`extract-${String((record.extraction_quality || {}).status || 'minimal').toLowerCase()}`);
   const button = node.querySelector('.record-summary');
   const indicator = node.querySelector('.expand-indicator');
 
@@ -1010,6 +1055,7 @@ if (els.sourceFilter) els.sourceFilter.addEventListener('change', applyFilters);
 if (els.filingTypeFilter) els.filingTypeFilter.addEventListener('change', applyFilters);
 if (els.timeWindowFilter) els.timeWindowFilter.addEventListener('change', applyFilters);
 if (els.displayModeFilter) els.displayModeFilter.addEventListener('change', applyFilters);
+if (els.extractionFilter) els.extractionFilter.addEventListener('change', applyFilters);
 els.actionFilter.addEventListener('change', applyFilters);
 if (els.focusFilter) els.focusFilter.addEventListener('change', applyFilters);
 els.minScore.addEventListener('input', applyFilters);

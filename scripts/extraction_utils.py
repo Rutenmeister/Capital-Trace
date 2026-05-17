@@ -2,15 +2,21 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+MISSING_NOT_PARSED = "Not disclosed / not parsed"
+MISSING_NOT_APPLICABLE = "Not applicable"
+MISSING_PENDING = "Pending comparison"
+
 
 def present(value: Any) -> bool:
     return value is not None and value != "" and value != "-" and value != []
 
 
 def num(value: Any) -> Optional[float]:
-    if value is None or value == "":
+    if value is None or value == "" or value == "-":
         return None
     try:
+        if isinstance(value, str):
+            value = value.replace(",", "").replace("$", "").replace("%", "").strip()
         return float(value)
     except Exception:
         return None
@@ -19,7 +25,7 @@ def num(value: Any) -> Optional[float]:
 def fmt_number(value: Any) -> str:
     n = num(value)
     if n is None:
-        return "Not disclosed / not parsed"
+        return MISSING_NOT_PARSED
     if abs(n - int(n)) < 1e-9:
         return f"{int(n):,}"
     return f"{n:,.2f}"
@@ -28,28 +34,40 @@ def fmt_number(value: Any) -> str:
 def fmt_money(value: Any) -> str:
     n = num(value)
     if n is None:
-        return "Not disclosed / not parsed"
-    if abs(n) >= 1_000_000_000:
-        return f"${n/1_000_000_000:.2f}B"
-    if abs(n) >= 1_000_000:
-        return f"${n/1_000_000:.2f}M"
-    return f"${n:,.0f}"
+        return MISSING_NOT_PARSED
+    sign = "-" if n < 0 else ""
+    n = abs(n)
+    if n >= 1_000_000_000:
+        return f"{sign}${n/1_000_000_000:.2f}B"
+    if n >= 1_000_000:
+        return f"{sign}${n/1_000_000:.2f}M"
+    if n >= 1_000:
+        return f"{sign}${n:,.0f}"
+    return f"{sign}${n:,.2f}"
 
 
 def fmt_price(value: Any) -> str:
     n = num(value)
     if n is None:
-        return "Not disclosed / not parsed"
+        return MISSING_NOT_PARSED
     return f"${n:,.2f}"
 
 
+def fmt_percent(value: Any) -> str:
+    n = num(value)
+    if n is None:
+        return MISSING_NOT_PARSED
+    return f"{n:.2f}%"
+
+
 def quality(parsed_fields: List[str], required_fields: List[str], notes: Optional[List[str]] = None) -> Dict[str, Any]:
-    parsed = [f for f in parsed_fields if f]
-    missing = [f for f in required_fields if f not in parsed]
-    if not required_fields:
+    parsed = sorted(set(f for f in parsed_fields if f))
+    required = list(dict.fromkeys(f for f in required_fields if f))
+    missing = [f for f in required if f not in parsed]
+    if not required:
         status = "minimal"
     else:
-        ratio = len(parsed) / max(1, len(required_fields))
+        ratio = len([f for f in parsed if f in required]) / max(1, len(required))
         if not missing:
             status = "complete"
         elif ratio >= 0.60:
@@ -58,11 +76,21 @@ def quality(parsed_fields: List[str], required_fields: List[str], notes: Optiona
             status = "minimal"
         else:
             status = "failed"
+    return {"status": status, "parsed_fields": parsed, "missing_fields": missing, "notes": notes or []}
+
+
+def _add_if_present(record: Dict[str, Any], field: str, parsed: List[str]) -> None:
+    if present(record.get(field)):
+        parsed.append(field)
+
+
+def _base_trust(record: Dict[str, Any], filed: str, event_date: str) -> Dict[str, str]:
     return {
-        "status": status,
-        "parsed_fields": parsed,
-        "missing_fields": missing,
-        "notes": notes or [],
+        "Filing type": str(record.get("filing_type") or record.get("source_form") or "Unknown"),
+        "Source lane": str(record.get("source_group") or "Unknown"),
+        "Filed date": filed or MISSING_NOT_PARSED,
+        "Event / report date": event_date or MISSING_NOT_PARSED,
+        "Accession": str(record.get("accession_number") or MISSING_NOT_PARSED),
     }
 
 
@@ -73,101 +101,96 @@ def add_vital_fields(record: Dict[str, Any]) -> Dict[str, Any]:
     lane = str(r.get("source_group") or "").lower()
     event = str(r.get("event_type") or "Record")
     ticker = str(r.get("ticker") or "-")
-    filer = str(r.get("filer") or "Not disclosed / not parsed")
-    role = str(r.get("role") or "Not disclosed / not parsed")
-    filed = str(r.get("filed_date") or "Not disclosed / not parsed")
-    event_date = str(r.get("event_date") or r.get("transaction_date") or r.get("period_end") or "Not disclosed / not parsed")
+    filer = str(r.get("filer") or MISSING_NOT_PARSED)
+    role = str(r.get("role") or MISSING_NOT_PARSED)
+    filed = str(r.get("filed_date") or MISSING_NOT_PARSED)
+    event_date = str(r.get("event_date") or r.get("transaction_date") or r.get("period_end") or MISSING_NOT_PARSED)
 
     parsed: List[str] = []
     required: List[str] = ["ticker", "filer", "filed_date", "source_url", "accession_number"]
     for field in required:
-        if present(r.get(field)):
-            parsed.append(field)
+        _add_if_present(r, field, parsed)
 
-    key_figures: Dict[str, str] = {}
     person_entity: Dict[str, str] = {
         "Filer / entity": filer,
         "Role / relationship": role,
     }
-    trust: Dict[str, str] = {
-        "Filing type": str(r.get("filing_type") or r.get("source_form") or "Unknown"),
-        "Source lane": str(r.get("source_group") or "Unknown"),
-        "Filed date": filed,
-        "Event / report date": event_date,
-        "Accession": str(r.get("accession_number") or "Not disclosed / not parsed"),
-    }
+    trust: Dict[str, str] = _base_trust(r, filed, event_date)
     notes: List[str] = []
+    key_figures: Dict[str, str] = {}
 
-    if present(r.get("shares")):
-        parsed.append("shares")
-    if present(r.get("price")):
-        parsed.append("price")
-    if present(r.get("transaction_value")) or present(r.get("market_value")):
-        parsed.append("value")
-    if present(r.get("role")):
-        parsed.append("role")
+    # Common figure fields.
+    for field in ["shares", "price", "transaction_value", "market_value", "role", "ownership_percent", "broker", "period_end", "cusip", "shares_after"]:
+        _add_if_present(r, field, parsed)
 
-    if "FORM 4" in form or "SEC INSIDER" in lane:
-        required += ["shares", "price", "value", "transaction_date", "role"]
+    if "FORM 4" in form or ("SEC INSIDER" in lane and "144" not in form):
+        required += ["shares", "price", "transaction_value", "transaction_date", "role"]
+        value = r.get("transaction_value")
         key_figures = {
             "Shares": fmt_number(r.get("shares")),
             "Price": fmt_price(r.get("price")),
-            "Estimated value": fmt_money(r.get("transaction_value")),
-            "Transaction code": str(r.get("transaction_code") or "Not disclosed / not parsed"),
+            "Estimated value": fmt_money(value),
+            "Transaction code": str(r.get("transaction_code") or MISSING_NOT_PARSED),
             "Ownership after": fmt_number(r.get("shares_after")),
         }
-        if present(r.get("transaction_value")) and present(r.get("shares")) and present(r.get("price")):
-            vital = f"{event}: {filer} ({role}) reported {fmt_number(r.get('shares'))} shares at {fmt_price(r.get('price'))}, estimated value {fmt_money(r.get('transaction_value'))}."
+        person_entity.update({"Insider": filer, "Relationship": role, "Ownership type": str(r.get("owner_type") or MISSING_NOT_PARSED)})
+        if present(value) and present(r.get("shares")) and present(r.get("price")):
+            vital = f"{event}: {filer} ({role}) reported {fmt_number(r.get('shares'))} shares at {fmt_price(r.get('price'))}, estimated value {fmt_money(value)}."
         elif present(r.get("shares")):
             vital = f"{event}: {filer} ({role}) reported {fmt_number(r.get('shares'))} shares; price/value were not fully parsed."
         else:
             vital = f"{event}: Form 4 record for {ticker}; key economic fields were not fully parsed."
     elif "144" in form or "PROPOSED" in lane:
-        required += ["shares", "value", "event_date", "broker"]
-        if present(r.get("broker")):
-            parsed.append("broker")
+        required += ["shares", "transaction_value", "event_date", "broker"]
+        value = r.get("transaction_value") or r.get("market_value")
         key_figures = {
             "Proposed shares": fmt_number(r.get("shares")),
-            "Estimated market value": fmt_money(r.get("transaction_value") or r.get("market_value")),
-            "Approximate sale date": str(r.get("event_date") or "Not disclosed / not parsed"),
-            "Broker": str(r.get("broker") or "Not disclosed / not parsed"),
+            "Estimated market value": fmt_money(value),
+            "Approximate sale date": str(r.get("event_date") or MISSING_NOT_PARSED),
+            "Broker": str(r.get("broker") or MISSING_NOT_PARSED),
         }
-        if present(r.get("transaction_value")) and present(r.get("shares")):
-            vital = f"Proposed sale notice: {filer} disclosed up to {fmt_number(r.get('shares'))} shares, estimated value {fmt_money(r.get('transaction_value'))}."
+        person_entity.update({"Proposed seller": filer, "Relationship": role})
+        if present(value) and present(r.get("shares")):
+            vital = f"Proposed sale notice: {filer} disclosed up to {fmt_number(r.get('shares'))} shares, estimated value {fmt_money(value)}."
         elif present(r.get("shares")):
             vital = f"Proposed sale notice: {filer} disclosed up to {fmt_number(r.get('shares'))} shares; market value was not parsed."
         else:
             vital = f"Proposed sale notice for {ticker}; proposed shares/value were not fully parsed."
         notes.append("Form 144 is a notice of proposed sale, not confirmation that the sale occurred.")
     elif "13F" in form or "INSTITUTIONAL" in lane:
-        required += ["shares", "value", "period_end", "cusip"]
-        if present(r.get("period_end")):
-            parsed.append("period_end")
-        if present(r.get("cusip")):
-            parsed.append("cusip")
+        required += ["shares", "market_value", "period_end", "cusip"]
+        value = r.get("market_value") or r.get("transaction_value")
         key_figures = {
             "Reported shares": fmt_number(r.get("shares")),
-            "Reported market value": fmt_money(r.get("market_value") or r.get("transaction_value")),
-            "Report period": str(r.get("period_end") or "Not disclosed / not parsed"),
-            "CUSIP": str(r.get("cusip") or "Not disclosed / not parsed"),
-            "Position rank": str(r.get("position_rank") or "Not disclosed / not parsed"),
+            "Reported market value": fmt_money(value),
+            "Report period": str(r.get("period_end") or MISSING_NOT_PARSED),
+            "CUSIP": str(r.get("cusip") or MISSING_NOT_PARSED),
+            "Position rank": str(r.get("position_rank") or MISSING_NOT_PARSED),
+            "Change vs prior quarter": str(r.get("change_vs_prior") or MISSING_PENDING),
         }
-        vital = f"13F holding: {filer} reported {fmt_number(r.get('shares'))} shares of {ticker}, market value {fmt_money(r.get('market_value') or r.get('transaction_value'))}, as of {r.get('period_end') or 'the reported period'}."
+        person_entity.update({"Manager": filer, "Manager CIK": str(r.get("manager_cik") or MISSING_NOT_PARSED), "Issuer": str(r.get("company") or ticker)})
+        vital = f"13F holding: {filer} reported {fmt_number(r.get('shares'))} shares of {ticker}, market value {fmt_money(value)}, as of {r.get('period_end') or 'the reported period'}."
         notes.append("13F is delayed institutional holdings context, not live trade evidence.")
     elif "13D" in form or "13G" in form or "OWNERSHIP" in lane:
         required += ["ownership_percent", "shares"]
-        if present(r.get("ownership_percent")):
-            parsed.append("ownership_percent")
         key_figures = {
             "Beneficial shares": fmt_number(r.get("shares")),
-            "Ownership percent": f"{num(r.get('ownership_percent')):.2f}%" if num(r.get("ownership_percent")) is not None else "Not disclosed / not parsed",
-            "Report / event date": str(r.get("event_date") or r.get("period_end") or "Not disclosed / not parsed"),
+            "Ownership percent": fmt_percent(r.get("ownership_percent")),
+            "Report / event date": str(r.get("event_date") or r.get("period_end") or MISSING_NOT_PARSED),
         }
+        person_entity.update({"Reporting person": filer, "Relationship": role})
         pct = key_figures["Ownership percent"]
-        vital = f"{event}: {filer} reported beneficial ownership for {ticker}; ownership percent {pct}."
+        shares_text = key_figures["Beneficial shares"]
+        if pct != MISSING_NOT_PARSED:
+            vital = f"{event}: {filer} reported beneficial ownership of {pct} of {ticker}."
+        elif shares_text != MISSING_NOT_PARSED:
+            vital = f"{event}: {filer} reported {shares_text} beneficial shares of {ticker}; ownership percent was not parsed."
+        else:
+            vital = f"{event}: {filer} filed an ownership record for {ticker}; key ownership figures were not fully parsed."
         notes.append("13D/G ownership records require source review for intent and exact ownership context.")
     else:
         vital = f"{event}: source-linked record for {ticker}."
+        key_figures = {"Status": MISSING_NOT_PARSED}
 
     r["vital_point"] = r.get("vital_point") or vital
     r["key_figures"] = r.get("key_figures") or key_figures

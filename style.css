@@ -725,3 +725,29 @@ td a { color: var(--teal); }
 @media (max-width: 1120px) {
   .figures-grid { grid-template-columns: 1fr; }
 }
+
+/* v0.12 vital-point precision / extraction audit refinements */
+.extraction-health-card .trace-brief p {
+  margin: 0 0 0.55rem;
+  line-height: 1.45;
+}
+.record-card.extract-complete {
+  box-shadow: inset 3px 0 0 rgba(38, 209, 169, 0.72), 0 18px 60px rgba(0,0,0,.18);
+}
+.record-card.extract-partial {
+  box-shadow: inset 3px 0 0 rgba(123, 183, 255, 0.58), 0 18px 60px rgba(0,0,0,.18);
+}
+.record-card.extract-minimal {
+  box-shadow: inset 3px 0 0 rgba(255, 197, 110, 0.48), 0 18px 60px rgba(0,0,0,.18);
+}
+.record-card.extract-failed {
+  box-shadow: inset 3px 0 0 rgba(255, 119, 119, 0.6), 0 18px 60px rgba(0,0,0,.18);
+}
+.vital-point {
+  font-size: 0.98rem;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+}
+.figure-panel dd {
+  overflow-wrap: anywhere;
+}

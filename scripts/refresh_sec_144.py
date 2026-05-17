@@ -110,10 +110,21 @@ def infer_filer(text: str) -> str:
     ], plain) or "Proposed seller / reporting person"
 
 
+def infer_relationship(text: str) -> str:
+    plain = compact_text(text)
+    return regex_first([
+        r"Relationship to Issuer\s*[:\-]?\s*([^|\n]{2,160})",
+        r"Relationship of Person to Issuer\s*[:\-]?\s*([^|\n]{2,160})",
+        r"Position with Issuer\s*[:\-]?\s*([^|\n]{2,160})",
+        r"Officer Title\s*[:\-]?\s*([^|\n]{2,160})",
+    ], plain) or "Proposed seller / affiliate"
+
+
 def infer_broker(text: str) -> str:
     plain = compact_text(text)
     return regex_first([
         r"Name of Broker\s*[:\-]?\s*([^|\n]{2,160})",
+        r"Broker or Market Maker\s*[:\-]?\s*([^|\n]{2,160})",
         r"Broker\s*[:\-]?\s*([^|\n]{2,160})",
     ], plain)
 
@@ -129,6 +140,8 @@ def infer_approx_sale_date(text: str) -> str:
 def infer_shares(text: str) -> Optional[float]:
     plain = compact_text(text)
     value = regex_first([
+        r"Number of Shares(?: or Other Units)? of Securities To Be Sold\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
+        r"No\. of Shares(?: or Other Units)? To Be Sold\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
         r"Number of Shares.*?To Be Sold\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
         r"Shares.*?To Be Sold\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
         r"Amount.*?To Be Sold\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
@@ -139,11 +152,20 @@ def infer_shares(text: str) -> Optional[float]:
 def infer_market_value(text: str) -> Optional[float]:
     plain = compact_text(text)
     value = regex_first([
-        r"Aggregate Market Value\s*[:\-]?\s*\$?([0-9,]+(?:\.[0-9]+)?)",
+        r"Aggregate Market Value(?: of Securities To Be Sold)?\s*[:\-]?\s*\$?([0-9,]+(?:\.[0-9]+)?)",
         r"Approximate.*?Market Value\s*[:\-]?\s*\$?([0-9,]+(?:\.[0-9]+)?)",
         r"Market Value.*?To Be Sold\s*[:\-]?\s*\$?([0-9,]+(?:\.[0-9]+)?)",
+        r"Aggregate Sales Price\s*[:\-]?\s*\$?([0-9,]+(?:\.[0-9]+)?)",
     ], plain)
     return parse_float(value)
+
+
+def infer_prior_three_month_sales(text: str) -> str:
+    plain = compact_text(text)
+    return regex_first([
+        r"Securities Sold During the Past 3 Months.*?([0-9,]+(?:\.[0-9]+)?\s+(?:shares|units).{0,120})",
+        r"Past 3 Months.*?([0-9,]+(?:\.[0-9]+)?\s+(?:shares|units).{0,120})",
+    ], plain)
 
 
 def score_form144(filed_date: str, market_value: Optional[float], shares: Optional[float], is_amendment: bool, watchlist_match: bool) -> Tuple[int, str, str, str, List[str], str]:
@@ -213,10 +235,12 @@ def parse_form144_record(company: Company, filing: Dict[str, Any]) -> Optional[D
     form = filing.get("form") or "144"
     filed_date = filing.get("filing_date") or filing.get("report_date") or ""
     filer = infer_filer(text)
+    relationship = infer_relationship(text)
     broker = infer_broker(text)
     approx_sale_date = infer_approx_sale_date(text)
     shares = infer_shares(text)
     market_value = infer_market_value(text)
+    prior_three_month_sales = infer_prior_three_month_sales(text)
     is_amendment = "/A" in str(form).upper()
     score, grade, freshness, action, reasons, caveat = score_form144(filed_date, market_value, shares, is_amendment, True)
     accession = filing.get("accession") or ""
@@ -235,7 +259,7 @@ def parse_form144_record(company: Company, filing: Dict[str, Any]) -> Optional[D
         "event_type": event_type,
         "entity_type": "insider or affiliate proposed seller",
         "filer": filer,
-        "role": "Proposed seller / affiliate",
+        "role": relationship or "Proposed seller / affiliate",
         "owner_type": "Proposed sale notice",
         "filed_date": filed_date,
         "event_date": approx_sale_date or filed_date,
@@ -247,6 +271,7 @@ def parse_form144_record(company: Company, filing: Dict[str, Any]) -> Optional[D
         "price": None,
         "transaction_value": market_value,
         "broker": broker,
+        "prior_three_month_sales": prior_three_month_sales,
         "score": score,
         "evidence_grade": grade,
         "freshness": freshness,
@@ -261,6 +286,7 @@ def parse_form144_record(company: Company, filing: Dict[str, Any]) -> Optional[D
         ],
         "caveat": caveat,
         "source_url": url,
+        "vital_point": (f"Proposed sale notice: {filer} disclosed up to {shares:,.0f} shares, estimated value ${market_value:,.0f}." if shares is not None and market_value is not None else f"Proposed sale notice for {company.ticker}; proposed shares/value were not fully parsed."),
     }
 
 

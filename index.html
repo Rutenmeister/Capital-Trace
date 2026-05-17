@@ -17,7 +17,7 @@
           <p class="header-copy">Public records of capital movement, traced to the source. Evidence-ranked research only, not investment advice.</p>
         </div>
         <div class="header-actions">
-          <div class="release-stamp">Capital Trace v0.11c · 180-Day Lookback Patch</div>
+          <div class="release-stamp">Capital Trace v0.12 · Vital Point Precision + Scoring Calibration</div>
           <div class="action-grid">
             <button id="refreshButton" type="button" class="primary-action">Check Now</button>
             <button id="exportButton" type="button" class="chip-button">Download CSV</button>
@@ -110,6 +110,7 @@
             <select id="focusFilter">
               <option value="all">All matching records</option>
               <option value="top10">Top 10 highest signal</option>
+              <option value="top_vital">Top Vital Points</option>
               <option value="purchases">Purchases only</option>
               <option value="ownership">Ownership records</option>
               <option value="institutional">Institutional records</option>
@@ -200,6 +201,11 @@
             <div id="traceBrief" class="trace-brief">Waiting for loaded records and diagnostics.</div>
           </div>
 
+          <div class="soft-card readout-card extraction-health-card">
+            <div class="tiny-label">Extraction Quality</div>
+            <div id="extractionHealth" class="trace-brief">Waiting for extraction audit.</div>
+          </div>
+
           <div class="soft-card readout-card">
             <div class="tiny-label">Evidence language</div>
             <div class="readout-grid">
@@ -252,14 +258,14 @@
             <article class="soft-card"><div class="tiny-label">Evidence Grade</div><p>A-grade records are direct, recent, exact, and source-linked. Lower grades indicate delay, ambiguity, administrative noise, or weaker signal value.</p></article>
             <article class="soft-card"><div class="tiny-label">Actionability</div><p>Actionability is a research label, not investment advice. It compresses the record into Research Now, Watch, Context Only, or Low Signal.</p></article>
             <article class="soft-card"><div class="tiny-label">Lane diagnostics</div><p>Each refresh reports what forms were checked, the lookback window, records added, holdings parsed, and whether a lane found no records or failed.</p></article>
-            <article class="soft-card"><div class="tiny-label">Extraction Quality</div><p>Each record is labeled complete, partial, minimal, or failed based on which economic fields were actually parsed. Missing values are shown honestly instead of guessed.</p></article>
+            <article class="soft-card"><div class="tiny-label">Extraction Quality</div><p>Each record is labeled complete, partial, minimal, or failed based on which economic fields were actually parsed. v0.12 separates Not disclosed, Not parsed, Not applicable, and Pending comparison where possible.</p></article>
           </div>
         </details>
       </section>
 
       <footer class="glass footer-note">
-        <div><strong>Capital Trace v0.11</strong></div>
-        <div>Universal SEC watchlist prototype. GitHub Actions runs a sequential SEC refresh across Form 4, 13D/G, 13F, and Form 144 lanes, writes lane diagnostics, extraction quality, vital points, and updates data/capital_trace.json for the dashboard.</div>
+        <div><strong>Capital Trace v0.12</strong></div>
+        <div>Universal SEC watchlist prototype. v0.12 sharpens vital points, key figures, extraction quality, scoring calibration, and source-specific caveats across Form 4, 13D/G, 13F, and Form 144 lanes.</div>
       </footer>
     </div>
   </main>

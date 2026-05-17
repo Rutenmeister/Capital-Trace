@@ -352,6 +352,7 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
             if diagnostics is not None:
                 diagnostics["holdings_parsed"] += len(holdings)
             print(f"[INFO]   holdings parsed: {len(holdings)}")
+            total_reported_value = sum((h.get("market_value") or 0) for h in holdings)
             for rank, holding in enumerate(holdings[:MAX_13F_HOLDINGS_PER_MANAGER], start=1):
                 match = match_watchlist_issuer(holding.get("name_of_issuer", ""), issuer_map)
                 ticker = match["ticker"] if match else f"CUSIP {holding.get('cusip') or '-'}"
@@ -361,6 +362,7 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
                 report_date = filing.get("report_date") or filed_date
                 score, grade, freshness, action, reasons, caveat = score_13f_record(holding, filed_date, report_date, watchlist_match, rank)
                 market_value = holding.get("market_value")
+                position_weight = (market_value / total_reported_value * 100) if market_value and total_reported_value else None
                 event_type = "13F Top Holding" if rank <= 10 else "13F Reported Holding"
                 record_id = f"sec-13f:{accession}:{manager.cik10}:{holding.get('cusip') or rank}"
                 if record_id in seen:
@@ -379,6 +381,8 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
                     "event_type": event_type,
                     "entity_type": "institutional manager",
                     "filer": manager.name,
+                    "manager_name": manager.name,
+                    "manager_cik": manager.cik10,
                     "role": "13F institutional investment manager",
                     "owner_type": "Institutional holdings report",
                     "filed_date": filed_date,
@@ -393,7 +397,9 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
                     "market_value": market_value,
                     "cusip": holding.get("cusip"),
                     "position_rank": rank,
+                    "position_weight": position_weight,
                     "position_value_label": format_money(market_value),
+                    "change_vs_prior": "Pending comparison",
                     "score": score,
                     "evidence_grade": grade,
                     "freshness": freshness,
@@ -408,6 +414,7 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
                     ],
                     "caveat": caveat,
                     "source_url": source_url,
+                    "vital_point": f"13F holding: {manager.name} reported {holding.get('shares'):,} shares of {ticker}, market value {format_money(market_value)}, as of {report_date}." if holding.get("shares") is not None else f"13F holding: {manager.name} reported {ticker}, market value {format_money(market_value)}, as of {report_date}.",
                 })
     if diagnostics is not None:
         diagnostics["records_added"] = len(records)
