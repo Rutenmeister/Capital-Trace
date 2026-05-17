@@ -517,3 +517,34 @@ td a { color: var(--teal); }
   line-height: 1;
   transform: translateY(0);
 }
+
+
+/* =========================================================
+   CAPITAL TRACE v0.7b FILING-TYPE FILTER PATCH
+   Filing type options are generated from actual loaded records.
+========================================================= */
+.filing-pill {
+  color: #d7fff8 !important;
+  border-color: rgba(88,215,255,.28) !important;
+  background: rgba(88,215,255,.07) !important;
+  white-space: nowrap;
+}
+.lane-pill {
+  color: #e9ddff !important;
+  border-color: rgba(139,92,246,.34) !important;
+  background: rgba(139,92,246,.10) !important;
+  white-space: nowrap;
+}
+.lane-ownership {
+  color: #fff1c7 !important;
+  border-color: rgba(251,191,36,.35) !important;
+  background: rgba(251,191,36,.09) !important;
+}
+.lane-insider {
+  color: #d7fff8 !important;
+  border-color: rgba(64,241,223,.30) !important;
+  background: rgba(64,241,223,.08) !important;
+}
+.control-block select#filingTypeFilter {
+  border-color: rgba(88,215,255,.24);
+}

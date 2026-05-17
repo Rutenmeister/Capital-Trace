@@ -15,7 +15,7 @@ const els = {
   searchInput: document.querySelector('#searchInput'),
   typeFilter: document.querySelector('#typeFilter'),
   sourceFilter: document.querySelector('#sourceFilter'),
-  filingFilter: document.querySelector('#filingFilter'),
+  filingTypeFilter: document.querySelector('#filingTypeFilter'),
   actionFilter: document.querySelector('#actionFilter'),
   focusFilter: document.querySelector('#focusFilter'),
   minScore: document.querySelector('#minScore'),
@@ -95,6 +95,7 @@ async function loadRecords(options = {}) {
 
     populateTypeFilter();
     populateSourceFilter();
+    populateFilingTypeFilter();
     applyFilters();
     updateBrief();
 
@@ -161,8 +162,10 @@ function normalizeMetadata(metadata, source) {
 }
 
 function normalizeCapitalTraceRecord(record = {}) {
-  const sourceType = record.source_type || record.source_form || record.source || '-';
-  const recordId = record.record_id || record.id || record.accession_number || [sourceType, record.ticker, record.filer, record.filed_date, record.event_type].join('|');
+  const rawSourceForm = record.source_form || record.filing_type || record.form_type || record.form || record.source_type || record.source || '-';
+  const sourceType = record.source_type || rawSourceForm || '-';
+  const filingType = normalizeFilingType(rawSourceForm || sourceType);
+  const recordId = record.record_id || record.id || record.accession_number || [sourceType, filingType, record.ticker, record.filer, record.filed_date, record.event_type].join('|');
   const eventDate = record.event_date || record.transaction_date || record.period_end || record.filed_date || '';
 
   return {
@@ -172,7 +175,8 @@ function normalizeCapitalTraceRecord(record = {}) {
     company: record.company || '-',
     source_group: record.source_group || inferSourceGroup(sourceType),
     source_type: sourceType,
-    source_form: record.source_form || sourceType,
+    source_form: rawSourceForm || sourceType,
+    filing_type: filingType,
     record_type: record.record_type || 'Capital Record',
     event_type: record.event_type || 'Public Record Event',
     entity_type: record.entity_type || inferEntityType(record),
@@ -198,6 +202,39 @@ function normalizeCapitalTraceRecord(record = {}) {
     shares: Number(record.shares || 0),
     price: Number(record.price || 0)
   };
+}
+
+
+function normalizeFilingType(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw || raw === '-') return 'Unknown';
+  const upper = raw.toUpperCase()
+    .replace(/^SEC\s+/, '')
+    .replace(/^SCHEDULE\s+/, 'SC ')
+    .replace(/^FORM\s+/, 'FORM ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (upper === '4' || upper === 'FORM 4') return 'Form 4';
+  if (upper === '4/A' || upper === 'FORM 4/A') return 'Form 4/A';
+  if (upper.includes('13D/A')) return 'SC 13D/A';
+  if (upper.includes('13G/A')) return 'SC 13G/A';
+  if (upper.includes('13D')) return 'SC 13D';
+  if (upper.includes('13G')) return 'SC 13G';
+  if (upper.includes('13F-HR')) return '13F-HR';
+  return raw.replace(/^SEC\s+/i, '').replace(/^Schedule\s+/i, 'SC ');
+}
+
+function countBy(records, getter) {
+  const counts = new Map();
+  for (const record of records) {
+    const value = getter(record) || 'Unknown';
+    counts.set(value, (counts.get(value) || 0) + 1);
+  }
+  return counts;
+}
+
+function optionLabelWithCount(label, count) {
+  return `${label} (${count})`;
 }
 
 function roleShort(role = '') {
@@ -320,62 +357,59 @@ function formatClock(value) {
 
 function populateTypeFilter() {
   const current = els.typeFilter.value;
-  const types = [...new Set(state.records.map((record) => record.record_type))].sort();
+  const counts = countBy(state.records, (record) => record.record_type);
+  const types = [...counts.keys()].sort();
   els.typeFilter.innerHTML = '<option value="all">All record types</option>';
   for (const type of types) {
     const option = document.createElement('option');
     option.value = type;
-    option.textContent = type;
+    option.textContent = optionLabelWithCount(type, counts.get(type));
     els.typeFilter.appendChild(option);
   }
-  if (types.includes(current)) els.typeFilter.value = current;
+  els.typeFilter.value = types.includes(current) ? current : 'all';
 }
 
 function populateSourceFilter() {
   if (!els.sourceFilter) return;
   const current = els.sourceFilter.value;
-  const groups = [...new Set(state.records.map((record) => record.source_group || record.source_type || 'Unknown'))].sort();
+  const counts = countBy(state.records, (record) => record.source_group || record.source_type || 'Unknown');
+  const groups = [...counts.keys()].sort();
   els.sourceFilter.innerHTML = '<option value="all">All source lanes</option>';
   for (const group of groups) {
     const option = document.createElement('option');
     option.value = group;
-    option.textContent = group;
+    option.textContent = optionLabelWithCount(group, counts.get(group));
     els.sourceFilter.appendChild(option);
   }
-  if (groups.includes(current)) els.sourceFilter.value = current;
+  els.sourceFilter.value = groups.includes(current) ? current : 'all';
 }
 
-function filingTypeLabel(record) {
-  const raw = String(record.source_form || record.source_type || '').trim();
-  const lower = raw.toLowerCase();
-  if (lower.includes('13d/a')) return 'Schedule 13D/A';
-  if (lower.includes('13g/a')) return 'Schedule 13G/A';
-  if (lower.includes('13d')) return 'Schedule 13D';
-  if (lower.includes('13g')) return 'Schedule 13G';
-  if (lower.includes('form 4')) return 'Form 4';
-  if (lower.includes('13f')) return '13F';
-  return raw || 'Unknown';
-}
-
-function populateFilingFilter() {
-  if (!els.filingFilter) return;
-  const current = els.filingFilter.value;
-  const filings = [...new Set(state.records.map(filingTypeLabel))].sort();
-  els.filingFilter.innerHTML = '<option value="all">All filing types</option>';
-  for (const filing of filings) {
+function populateFilingTypeFilter() {
+  if (!els.filingTypeFilter) return;
+  const current = els.filingTypeFilter.value;
+  const counts = countBy(state.records, (record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type));
+  const filingTypes = [...counts.keys()].sort((a, b) => {
+    const order = ['Form 4', 'Form 4/A', 'SC 13D', 'SC 13D/A', 'SC 13G', 'SC 13G/A', '13F-HR', 'Unknown'];
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
+    if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    return a.localeCompare(b);
+  });
+  els.filingTypeFilter.innerHTML = '<option value="all">All filing types</option>';
+  for (const filingType of filingTypes) {
     const option = document.createElement('option');
-    option.value = filing;
-    option.textContent = filing;
-    els.filingFilter.appendChild(option);
+    option.value = filingType;
+    option.textContent = optionLabelWithCount(filingType, counts.get(filingType));
+    els.filingTypeFilter.appendChild(option);
   }
-  if (filings.includes(current)) els.filingFilter.value = current;
+  els.filingTypeFilter.value = filingTypes.includes(current) ? current : 'all';
 }
 
 function applyFilters() {
   const query = els.searchInput.value.trim().toLowerCase();
   const selectedType = els.typeFilter.value;
   const selectedSource = els.sourceFilter ? els.sourceFilter.value : 'all';
-  const selectedFiling = els.filingFilter ? els.filingFilter.value : 'all';
+  const selectedFilingType = els.filingTypeFilter ? els.filingTypeFilter.value : 'all';
   const selectedAction = els.actionFilter.value;
   const selectedFocus = els.focusFilter ? els.focusFilter.value : 'all';
   const minimumScore = Number(els.minScore.value || 0);
@@ -402,7 +436,7 @@ function applyFilters() {
     if (query && !haystack.includes(query)) return false;
     if (selectedType !== 'all' && record.record_type !== selectedType) return false;
     if (selectedSource !== 'all' && (record.source_group || record.source_type) !== selectedSource) return false;
-    if (selectedFiling !== 'all' && filingTypeLabel(record) !== selectedFiling) return false;
+    if (selectedFilingType !== 'all' && (record.filing_type || normalizeFilingType(record.source_form || record.source_type)) !== selectedFilingType) return false;
     if (selectedAction !== 'all' && record.actionability !== selectedAction) return false;
     if (Number(record.score || 0) < minimumScore) return false;
     if (watchlistOnly && !record.watchlist_match) return false;
@@ -429,6 +463,7 @@ function updateBrief() {
   const purchases = state.records.filter(isPurchase).length;
   const sales = state.records.filter(isSale).length;
   const ownership = state.records.filter(isOwnership).length;
+  const filingTypeCount = new Set(state.records.map((record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type))).size;
   const refreshed = state.metadata.last_refreshed || 'Sample data';
   const top = state.records[0];
   const topLane = top ? top.event_type : '-';
@@ -447,7 +482,7 @@ function updateBrief() {
   if (els.lastSecCheck) els.lastSecCheck.textContent = formatDate(state.metadata.last_sec_check, true);
   if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
   if (els.dataMode) els.dataMode.textContent = state.metadata.data_mode || '-';
-  if (els.sourceCoverage) els.sourceCoverage.textContent = `${(state.metadata.source_groups || []).length} lanes`;
+  if (els.sourceCoverage) els.sourceCoverage.textContent = `${(state.metadata.source_groups || []).length} lanes / ${filingTypeCount} forms`;
 }
 
 function renderAll() {
@@ -482,6 +517,14 @@ function createCard(record, expanded = false) {
   node.querySelector('.event-title').textContent = record.event_type;
   node.querySelector('.company-line').textContent = record.company;
   node.querySelector('.score-pill').textContent = `Score ${record.score}`;
+
+  const lanePill = node.querySelector('.lane-pill');
+  if (lanePill) {
+    lanePill.textContent = isOwnership(record) ? 'Ownership' : String(record.source_group || 'Source').replace(/^SEC\s+/i, '');
+    lanePill.classList.add(isOwnership(record) ? 'lane-ownership' : 'lane-insider');
+  }
+  const filingPill = node.querySelector('.filing-pill');
+  if (filingPill) filingPill.textContent = record.filing_type || normalizeFilingType(record.source_form || record.source_type);
 
   const grade = node.querySelector('.grade-pill');
   grade.textContent = `Evidence ${record.evidence_grade}`;
@@ -560,6 +603,7 @@ function renderTable() {
     <tr>
       <td><strong>${escapeHtml(record.ticker)}</strong><div class="table-sub">${escapeHtml(record.company)}</div></td>
       <td>${escapeHtml(record.event_type)}<div class="table-sub">${escapeHtml(record.record_type)}</div></td>
+      <td>${escapeHtml(record.filing_type || normalizeFilingType(record.source_form || record.source_type))}<div class="table-sub">${escapeHtml(record.source_group)}</div></td>
       <td>${escapeHtml(record.filer)}<div class="table-sub">${escapeHtml(record.source_form)}</div></td>
       <td>${record.score}</td>
       <td>${escapeHtml(record.evidence_grade)}</td>
@@ -575,6 +619,7 @@ function renderTable() {
         <tr>
           <th>Ticker</th>
           <th>Event</th>
+          <th>Filing</th>
           <th>Filer</th>
           <th>Score</th>
           <th>Grade</th>
@@ -634,6 +679,7 @@ els.exportButton.addEventListener('click', exportCsv);
 els.searchInput.addEventListener('input', applyFilters);
 els.typeFilter.addEventListener('change', applyFilters);
 if (els.sourceFilter) els.sourceFilter.addEventListener('change', applyFilters);
+if (els.filingTypeFilter) els.filingTypeFilter.addEventListener('change', applyFilters);
 els.actionFilter.addEventListener('change', applyFilters);
 if (els.focusFilter) els.focusFilter.addEventListener('change', applyFilters);
 els.minScore.addEventListener('input', applyFilters);

@@ -17,7 +17,7 @@
           <p class="header-copy">Public records of capital movement, traced to the source. Evidence-ranked research only, not investment advice.</p>
         </div>
         <div class="header-actions">
-          <div class="release-stamp">Capital Trace v0.7 · Ownership Lane</div>
+          <div class="release-stamp">Capital Trace v0.7b · Ownership Lane</div>
           <div class="action-grid">
             <button id="refreshButton" type="button" class="primary-action">Check Now</button>
             <button id="exportButton" type="button" class="chip-button">Download CSV</button>
@@ -60,7 +60,7 @@
 
           <label class="control-block">
             <span class="tiny-label">Filing type</span>
-            <select id="filingFilter"><option value="all">All filing types</option></select>
+            <select id="filingTypeFilter"><option value="all">All filing types</option></select>
           </label>
 
           <label class="control-block">
@@ -214,7 +214,7 @@
       </section>
 
       <footer class="glass footer-note">
-        <div><strong>Capital Trace v0.7</strong></div>
+        <div><strong>Capital Trace v0.7b</strong></div>
         <div>Hosted SEC Form 4 + 13D/G ownership watchlist prototype. GitHub Actions refreshes data/capital_trace.json; dashboard check reloads the saved record file.</div>
       </footer>
     </div>
@@ -232,6 +232,8 @@
           <p class="company-line"></p>
         </div>
         <div class="summary-badges">
+          <span class="lane-pill"></span>
+          <span class="filing-pill"></span>
           <span class="action-pill"></span>
           <span class="grade-pill"></span>
           <span class="freshness-pill"></span>
