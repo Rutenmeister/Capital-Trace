@@ -1,7 +1,7 @@
 {
   "schema_version": "0.12",
   "data_mode": "sec-watchlist-multilane",
-  "generated_at": "2026-05-17T23:04:20Z",
+  "generated_at": "2026-05-17T23:17:44Z",
   "lookback_days": 180,
   "records_count": 650,
   "lane_count": 4,
@@ -19,7 +19,7 @@
   ],
   "lane_diagnostics": {
     "insider_form4": {
-      "status": "ok",
+      "status": "checked_no_records",
       "lane": "insider",
       "forms_checked": [
         "4",
@@ -27,11 +27,11 @@
       ],
       "companies_checked": 10,
       "lookback_days": 180,
-      "filings_seen": 246,
-      "filings_matched": 246,
-      "records_added": 894,
+      "filings_seen": 0,
+      "filings_matched": 0,
+      "records_added": 0,
       "errors": [],
-      "note": "Lane completed and added records."
+      "note": "Lane completed and found no matching filings in the current watchlist/lookback window."
     },
     "ownership_13d_13g": {
       "status": "checked_no_records",
@@ -51,7 +51,7 @@
       "note": "Lane completed and found no matching filings in the current watchlist/lookback window."
     },
     "institutional_13f": {
-      "status": "ok",
+      "status": "checked_no_records",
       "lane": "institutional",
       "forms_checked": [
         "13F-HR",
@@ -59,16 +59,16 @@
       ],
       "companies_checked": 6,
       "lookback_days": 180,
-      "filings_seen": 12,
-      "filings_matched": 12,
-      "records_added": 231,
+      "filings_seen": 0,
+      "filings_matched": 0,
+      "records_added": 0,
       "errors": [],
-      "note": "Lane completed and added records.",
+      "note": "Lane completed and found no matching filings in the current watchlist/lookback window.",
       "managers_checked": 6,
-      "holdings_parsed": 40024
+      "holdings_parsed": 0
     },
     "proposed_sales_144": {
-      "status": "ok",
+      "status": "checked_no_records",
       "lane": "proposed_sales",
       "forms_checked": [
         "144",
@@ -76,11 +76,11 @@
       ],
       "companies_checked": 10,
       "lookback_days": 180,
-      "filings_seen": 155,
-      "filings_matched": 155,
-      "records_added": 155,
+      "filings_seen": 0,
+      "filings_matched": 0,
+      "records_added": 0,
       "errors": [],
-      "note": "Lane completed and added records."
+      "note": "Lane completed and found no matching filings in the current watchlist/lookback window."
     }
   },
   "metadata": {
@@ -89,9 +89,9 @@
     "data_mode": "sec-watchlist-multilane",
     "source_pipeline": "sec-universal-watchlist-template",
     "refresh_frequency": "hourly",
-    "last_refreshed": "2026-05-17T23:04:20Z",
-    "last_data_update": "2026-05-17T23:04:20Z",
-    "last_sec_check": "2026-05-17T23:04:20Z",
+    "last_refreshed": "2026-05-17T23:17:44Z",
+    "last_data_update": "2026-05-17T23:17:44Z",
+    "last_sec_check": "2026-05-17T23:17:44Z",
     "next_scheduled_check": "2026-05-18T00:00:00Z",
     "source_groups": [
       "SEC Insider Ownership",
@@ -131,7 +131,7 @@
       "Form 4": 265,
       "Form 144": 154
     },
-    "preserved_previous_records": false,
+    "preserved_previous_records": true,
     "methodology_version": "0.12-vital-point-precision-scoring-calibration",
     "extraction_summary": {
       "complete": 231,
