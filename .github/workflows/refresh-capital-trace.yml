@@ -21,11 +21,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Refresh SEC Form 4 records
-        run: python scripts/refresh_sec_form4.py
+      - name: Refresh Capital Trace records
+        run: python scripts/refresh_capital_trace.py
 
       - name: Commit updated data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Refresh Capital Trace SEC Form 4 data"
+          commit_message: "Refresh Capital Trace SEC multilane data"
           file_pattern: data/capital_trace.json
