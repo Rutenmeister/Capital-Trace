@@ -27,5 +27,5 @@ jobs:
       - name: Commit updated data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Refresh Capital Trace SEC Form 144 proposed sale data"
+          commit_message: "Refresh Capital Trace extraction audit data"
           file_pattern: data/capital_trace.json
