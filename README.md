@@ -1,4 +1,4 @@
-# Capital Trace v0.10 — SEC Form 144 Proposed Sale Lane
+# Capital Trace v0.10a — SEC Form 144 Proposed Sale Lane
 
 Capital Trace is an Edgefield research prototype: **public records of capital movement, traced to the source.**
 
@@ -88,7 +88,7 @@ Ctrl + Shift + R
 
 ## v0.10 notes — Form 144 Proposed Sale Lane
 
-Capital Trace v0.10 adds a watchlist-based SEC Form 144 / 144/A lane. Form 144 is a proposed sale notice, not a confirmed sale. The lane is intentionally caveated and should be used as context until later Form 4 records confirm actual transactions.
+Capital Trace v0.10a adds a watchlist-based SEC Form 144 / 144/A lane. Form 144 is a proposed sale notice, not a confirmed sale. The lane is intentionally caveated and should be used as context until later Form 4 records confirm actual transactions.
 
 Supported lanes after v0.10:
 

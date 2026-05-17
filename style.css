@@ -649,3 +649,18 @@ td a { color: var(--teal); }
   border-color: rgba(45, 212, 191, 0.72);
   box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.2), 0 0 26px rgba(45, 212, 191, 0.12);
 }
+
+/* v0.10a lane-health transparency patch */
+.lane-health-row.lane-zero-records {
+  opacity: 0.86;
+}
+.lane-health-row.lane-has-records {
+  border-color: rgba(80, 227, 194, 0.36);
+}
+.lane-status-not_reported {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(148, 163, 184, 0.06);
+}
+.lane-status-not_reported span {
+  color: #cbd5e1;
+}

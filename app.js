@@ -140,7 +140,8 @@ function preparePayload(payload) {
     data_mode: raw.data_mode || (raw.metadata && raw.metadata.data_mode),
     source_pipeline: raw.source_pipeline || (raw.metadata && raw.metadata.source_pipeline),
     refresh_frequency: raw.refresh_frequency || (raw.metadata && raw.metadata.refresh_frequency),
-    source_groups: raw.source_groups || raw.coverage_lanes || (raw.metadata && (raw.metadata.source_groups || raw.metadata.coverage_lanes)),
+    source_groups: raw.source_groups || (raw.metadata && raw.metadata.source_groups),
+    coverage_lanes: raw.coverage_lanes || (raw.metadata && raw.metadata.coverage_lanes),
     methodology_version: raw.methodology_version || (raw.metadata && raw.metadata.methodology_version),
     lane_diagnostics: raw.lane_diagnostics || (raw.metadata && raw.metadata.lane_diagnostics),
     lookback_days: raw.lookback_days || (raw.metadata && raw.metadata.lookback_days),
@@ -166,6 +167,7 @@ function normalizeMetadata(metadata, source) {
     last_sec_check: lastSecCheck,
     next_scheduled_check: metadata.next_scheduled_check || estimateNextHourlyCheck(lastSecCheck || lastRefreshed),
     source_groups: metadata.source_groups || ['SEC Insider Ownership', 'SEC Ownership Thresholds'],
+    coverage_lanes: metadata.coverage_lanes || metadata.source_groups || ['SEC Form 4', 'SEC 13D/G Ownership', 'SEC 13F Institutional Holdings', 'SEC Form 144 Proposed Sales'],
     methodology_version: metadata.methodology_version || '0.10',
     lane_diagnostics: metadata.lane_diagnostics || {},
     lookback_days: metadata.lookback_days || 60,
@@ -577,7 +579,10 @@ function updateBrief() {
   if (els.lastSecCheck) els.lastSecCheck.textContent = formatDate(state.metadata.last_sec_check, true);
   if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
   if (els.dataMode) els.dataMode.textContent = state.metadata.data_mode || '-';
-  if (els.sourceCoverage) els.sourceCoverage.textContent = `${(state.metadata.source_groups || []).length} lanes / ${filingTypeCount} forms`;
+  if (els.sourceCoverage) {
+    const laneTotal = Math.max((state.metadata.coverage_lanes || []).length, EXPECTED_LANES.length);
+    els.sourceCoverage.textContent = `${laneTotal} lanes / ${filingTypeCount} loaded forms`;
+  }
   renderLaneHealth();
   renderTraceBrief();
 }
@@ -591,29 +596,59 @@ function laneStatusLabel(status) {
     disabled: 'Disabled',
     stale: 'Stale',
     running: 'Running',
+    not_reported: 'Not reported',
   }[status] || String(status || 'Unknown');
+}
+
+function deriveLaneDiagnostics() {
+  const diagnostics = state.metadata.lane_diagnostics || {};
+  return EXPECTED_LANES.map((lane) => {
+    const existing = diagnostics[lane.key] || diagnostics[lane.lane] || null;
+    const recordCount = state.records.filter(lane.match).length;
+    if (existing) {
+      return {
+        ...existing,
+        key: lane.key,
+        label: lane.label,
+        forms_checked: existing.forms_checked || lane.forms,
+        records_added: Number(existing.records_added ?? recordCount),
+      };
+    }
+    return {
+      key: lane.key,
+      label: lane.label,
+      lane: lane.lane,
+      status: 'not_reported',
+      forms_checked: lane.forms,
+      companies_checked: 0,
+      lookback_days: state.metadata.lookback_days || 60,
+      records_added: recordCount,
+      errors: [],
+      note: recordCount > 0
+        ? 'Records exist for this lane, but this data file did not include lane diagnostics. Re-run the v0.10+ workflow to write diagnostics.'
+        : 'This supported lane is visible for transparency, but the current data file did not report diagnostics or records for it.',
+    };
+  });
 }
 
 function renderLaneHealth() {
   if (!els.laneHealth) return;
-  const diagnostics = state.metadata.lane_diagnostics || {};
-  const entries = Object.entries(diagnostics);
-  if (!entries.length) {
-    els.laneHealth.innerHTML = '<p class="empty-mini">No lane diagnostics found in the current data file.</p>';
-    return;
-  }
-  els.laneHealth.innerHTML = entries.map(([key, diag]) => {
+  const lanes = deriveLaneDiagnostics();
+  els.laneHealth.innerHTML = lanes.map((diag) => {
     const status = diag.status || 'unknown';
     const forms = Array.isArray(diag.forms_checked) ? diag.forms_checked.join(', ') : '-';
     const errors = Array.isArray(diag.errors) ? diag.errors.length : 0;
-    return `<div class="lane-health-row lane-status-${escapeHtml(status)}">
-      <div><strong>${escapeHtml(key.replaceAll('_', ' '))}</strong><small>${escapeHtml(forms)}</small></div>
-      <div><span>${escapeHtml(laneStatusLabel(status))}</span><small>${Number(diag.records_added || 0)} records · ${Number(diag.companies_checked || 0)} companies · ${Number(diag.lookback_days || state.metadata.lookback_days || 0)}d</small></div>
+    const count = Number(diag.records_added || 0);
+    const note = diag.note || (count === 0 ? 'No records from this lane are present in the current loaded data.' : 'Lane has records in the current loaded data.');
+    return `<div class="lane-health-row lane-status-${escapeHtml(status)} ${count ? 'lane-has-records' : 'lane-zero-records'}">
+      <div><strong>${escapeHtml(diag.label || diag.key.replaceAll('_', ' '))}</strong><small>${escapeHtml(forms)}</small></div>
+      <div><span>${escapeHtml(laneStatusLabel(status))}</span><small>${count} records · ${Number(diag.companies_checked || 0)} companies · ${Number(diag.lookback_days || state.metadata.lookback_days || 0)}d</small></div>
       ${errors ? `<p class="lane-error">${errors} error${errors === 1 ? '' : 's'} logged. Review workflow output.</p>` : ''}
-      ${diag.note ? `<p class="lane-note">${escapeHtml(diag.note)}</p>` : ''}
+      ${note ? `<p class="lane-note">${escapeHtml(note)}</p>` : ''}
     </div>`;
   }).join('');
 }
+
 
 function renderTraceBrief() {
   if (!els.traceBrief) return;
@@ -624,7 +659,7 @@ function renderTraceBrief() {
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
     .map(([form, count]) => `${escapeHtml(form)}: ${Number(count)}`)
     .join(' · ') || 'No filing counts available';
-  els.traceBrief.innerHTML = `<p><strong>${state.records.length}</strong> records loaded across <strong>${(state.metadata.source_groups || []).length}</strong> visible source lane${(state.metadata.source_groups || []).length === 1 ? '' : 's'}.</p>
+  els.traceBrief.innerHTML = `<p><strong>${state.records.length}</strong> records loaded across <strong>${Math.max((state.metadata.coverage_lanes || []).length, EXPECTED_LANES.length)}</strong> supported SEC lanes.</p>
     <p>Lookback: <strong>${escapeHtml(state.metadata.lookback_days || 'unknown')}</strong> days · Data mode: <strong>${escapeHtml(state.metadata.data_mode || '-')}</strong></p>
     <p>${formText}</p>
     <p class="trace-note">Current coverage is SEC watchlist only, not the full SEC universe.</p>`;
