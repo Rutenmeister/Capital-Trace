@@ -50,6 +50,41 @@ const els = {
   template: document.querySelector('#recordCardTemplate'),
 };
 
+function setText(selectorOrNode, value) {
+  const node = typeof selectorOrNode === 'string' ? document.querySelector(selectorOrNode) : selectorOrNode;
+  if (node) node.textContent = value == null || value === '' ? '-' : String(value);
+}
+
+function setHtml(selectorOrNode, value) {
+  const node = typeof selectorOrNode === 'string' ? document.querySelector(selectorOrNode) : selectorOrNode;
+  if (node) node.innerHTML = value == null ? '' : String(value);
+}
+
+function firstArray(...candidates) {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      const vals = Object.values(candidate);
+      if (vals.length && vals.every((v) => v && typeof v === 'object')) return vals;
+    }
+  }
+  return [];
+}
+
+function toNumber(value, fallback = 0) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value === null || value === undefined || value === '') return fallback;
+  const cleaned = String(value).replace(/[$,%\s,]/g, '');
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function ensureArray(value) {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === '') return [];
+  return [String(value)];
+}
+
 async function loadRecords(options = {}) {
   const { manual = false, silent = false } = options;
   let payload = null;
@@ -117,39 +152,46 @@ async function loadRecords(options = {}) {
     console.error('Capital Trace record load failed:', error);
     els.evidenceQueue.innerHTML = `<p class="empty-state">Capital Trace found the data file, but could not read its record format. ${escapeHtml(error.message || String(error))}</p>`;
     els.visibleRecordStack.innerHTML = '';
-    setSyncStatus('Data file found, but record format could not be read. Upload the v0.5a compatibility patch.', 'error');
+    setSyncStatus('Data file found, but the dashboard could not render it. Upload the v0.11a render compatibility patch.', 'error');
   }
 }
 
 function preparePayload(payload) {
-  // Compatibility layer: accepts all Capital Trace data shapes used so far:
-  // 1) [records]
-  // 2) { metadata, records }
-  // 3) { schema_version, generated_at, records }
-  // 4) { data: { metadata, records } }
-  const raw = payload && payload.data && Array.isArray(payload.data.records) ? payload.data : payload;
-  const records = Array.isArray(raw) ? raw : Array.isArray(raw.records) ? raw.records : [];
-  if (!Array.isArray(records)) throw new Error('records is not an array');
+  // Compatibility layer: accepts all Capital Trace data shapes used so far and
+  // tolerates wrapped output from the refresh scripts. This prevents a UI failure
+  // when the engine adds diagnostics/trust-layer metadata around the record array.
+  const raw = payload && payload.data && !Array.isArray(payload.data) ? payload.data : payload;
+  const records = firstArray(
+    Array.isArray(payload) ? payload : null,
+    raw && raw.records,
+    raw && raw.items,
+    raw && raw.results,
+    raw && raw.data,
+    raw && raw.data && raw.data.records,
+    raw && raw.payload && raw.payload.records
+  );
 
-  const metadata = Array.isArray(raw) ? {} : {
-    ...(raw.metadata || {}),
-    product: raw.product || (raw.metadata && raw.metadata.product) || 'Capital Trace',
-    schema_version: raw.schema_version || (raw.metadata && raw.metadata.schema_version),
-    last_refreshed: raw.last_refreshed || raw.generated_at || (raw.metadata && raw.metadata.last_refreshed),
-    last_data_update: raw.last_data_update || raw.generated_at || (raw.metadata && raw.metadata.last_data_update),
-    last_sec_check: raw.last_sec_check || raw.generated_at || (raw.metadata && raw.metadata.last_sec_check),
-    next_scheduled_check: raw.next_scheduled_check || (raw.metadata && raw.metadata.next_scheduled_check),
-    data_mode: raw.data_mode || (raw.metadata && raw.metadata.data_mode),
-    source_pipeline: raw.source_pipeline || (raw.metadata && raw.metadata.source_pipeline),
-    refresh_frequency: raw.refresh_frequency || (raw.metadata && raw.metadata.refresh_frequency),
-    source_groups: raw.source_groups || (raw.metadata && raw.metadata.source_groups),
-    coverage_lanes: raw.coverage_lanes || (raw.metadata && raw.metadata.coverage_lanes),
-    methodology_version: raw.methodology_version || (raw.metadata && raw.metadata.methodology_version),
-    lane_diagnostics: raw.lane_diagnostics || (raw.metadata && raw.metadata.lane_diagnostics),
-    lookback_days: raw.lookback_days || (raw.metadata && raw.metadata.lookback_days),
-    supported_forms: raw.supported_forms || (raw.metadata && raw.metadata.supported_forms),
-    counts_by_lane: raw.counts_by_lane || (raw.metadata && raw.metadata.counts_by_lane),
-    counts_by_form: raw.counts_by_form || (raw.metadata && raw.metadata.counts_by_form),
+  const metadataSource = Array.isArray(raw) ? {} : (raw || {});
+  const metadata = {
+    ...((metadataSource && metadataSource.metadata) || {}),
+    product: metadataSource.product || (metadataSource.metadata && metadataSource.metadata.product) || 'Capital Trace',
+    schema_version: metadataSource.schema_version || (metadataSource.metadata && metadataSource.metadata.schema_version),
+    last_refreshed: metadataSource.last_refreshed || metadataSource.generated_at || (metadataSource.metadata && metadataSource.metadata.last_refreshed),
+    last_data_update: metadataSource.last_data_update || metadataSource.generated_at || (metadataSource.metadata && metadataSource.metadata.last_data_update),
+    last_sec_check: metadataSource.last_sec_check || metadataSource.generated_at || (metadataSource.metadata && metadataSource.metadata.last_sec_check),
+    next_scheduled_check: metadataSource.next_scheduled_check || (metadataSource.metadata && metadataSource.metadata.next_scheduled_check),
+    data_mode: metadataSource.data_mode || (metadataSource.metadata && metadataSource.metadata.data_mode),
+    source_pipeline: metadataSource.source_pipeline || (metadataSource.metadata && metadataSource.metadata.source_pipeline),
+    refresh_frequency: metadataSource.refresh_frequency || (metadataSource.metadata && metadataSource.metadata.refresh_frequency),
+    source_groups: metadataSource.source_groups || (metadataSource.metadata && metadataSource.metadata.source_groups),
+    coverage_lanes: metadataSource.coverage_lanes || (metadataSource.metadata && metadataSource.metadata.coverage_lanes),
+    methodology_version: metadataSource.methodology_version || (metadataSource.metadata && metadataSource.metadata.methodology_version),
+    lane_diagnostics: metadataSource.lane_diagnostics || (metadataSource.metadata && metadataSource.metadata.lane_diagnostics),
+    lookback_days: metadataSource.lookback_days || (metadataSource.metadata && metadataSource.metadata.lookback_days),
+    supported_forms: metadataSource.supported_forms || (metadataSource.metadata && metadataSource.metadata.supported_forms),
+    counts_by_lane: metadataSource.counts_by_lane || (metadataSource.metadata && metadataSource.metadata.counts_by_lane),
+    counts_by_form: metadataSource.counts_by_form || (metadataSource.metadata && metadataSource.metadata.counts_by_form),
+    extraction_summary: metadataSource.extraction_summary || (metadataSource.metadata && metadataSource.metadata.extraction_summary),
   };
 
   return { metadata, records };
@@ -211,14 +253,19 @@ function normalizeCapitalTraceRecord(record = {}) {
     freshness: record.freshness || 'Unclassified',
     actionability: record.actionability || 'Context Only',
     watchlist_match: Boolean(record.watchlist_match),
-    rank_reasons: Array.isArray(record.rank_reasons) ? record.rank_reasons : [],
-    does_not_prove: Array.isArray(record.does_not_prove) ? record.does_not_prove : [],
+    rank_reasons: ensureArray(record.rank_reasons),
+    does_not_prove: ensureArray(record.does_not_prove),
     caveat: record.caveat || 'Source record requires additional review before use.',
     source_url: record.source_url || '#',
     transaction_code: record.transaction_code || '',
-    transaction_value: Number(record.transaction_value || 0),
-    shares: Number(record.shares || 0),
-    price: Number(record.price || 0)
+    transaction_value: toNumber(record.transaction_value || record.estimated_value || record.market_value, 0),
+    shares: toNumber(record.shares || record.proposed_shares, 0),
+    price: toNumber(record.price || record.share_price, 0),
+    vital_point: record.vital_point || '',
+    key_figures: record.key_figures || record.figures || {},
+    person_entity: record.person_entity || record.person || record.entity || {},
+    source_trust: record.source_trust || record.trust || {},
+    extraction_quality: record.extraction_quality || { status: 'minimal', missing_fields: [], parsed_fields: [], notes: [] }
   };
 }
 
@@ -578,8 +625,8 @@ function updateBrief() {
   els.readoutWatch.textContent = watch;
   els.readoutContext.textContent = context;
   els.readoutHidden.textContent = lowSignal;
-  els.briefTitle.textContent = `${researchNow} high-signal record${researchNow === 1 ? '' : 's'}`;
-  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${institutional} institutional records, ${proposedSales} proposed-sale notices, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Extraction: ${Object.entries(extractionCounts).map(([k, v]) => `${k} ${v}`).join(', ')}. Low-signal records can stay hidden by default.`;
+  setText(els.briefTitle, `${researchNow} high-signal record${researchNow === 1 ? '' : 's'}`);
+  setText(els.briefText, `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${institutional} institutional records, ${proposedSales} proposed-sale notices, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Extraction: ${Object.entries(extractionCounts).map(([k, v]) => `${k} ${v}`).join(', ')}. Low-signal records can stay hidden by default.`);
 
   if (els.lastSecCheck) els.lastSecCheck.textContent = formatDate(state.metadata.last_sec_check, true);
   if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
@@ -733,55 +780,54 @@ function extractionLabel(record) {
 }
 
 function createCard(record, expanded = false) {
+  if (!els.template || !els.template.content || !els.template.content.firstElementChild) return createFallbackCard(record);
   const node = els.template.content.firstElementChild.cloneNode(true);
+  const q = (sel) => node.querySelector(sel);
   if (recordMatchesHighlight(record)) node.classList.add('highlight-match');
   const button = node.querySelector('.record-summary');
   const indicator = node.querySelector('.expand-indicator');
 
-  node.querySelector('.ticker').textContent = record.ticker;
-  node.querySelector('.event-title').textContent = record.event_type;
-  node.querySelector('.company-line').textContent = record.company;
-  node.querySelector('.score-pill').textContent = `Score ${record.score}`;
+  setText(q('.ticker'), record.ticker);
+  setText(q('.event-title'), record.event_type);
+  setText(q('.company-line'), record.company);
+  setText(q('.score-pill'), `Score ${record.score}`);
 
-  const lanePill = node.querySelector('.lane-pill');
+  const lanePill = q('.lane-pill');
   if (lanePill) {
     lanePill.textContent = isProposedSale(record) ? 'Proposed Sale' : isInstitutional(record) ? 'Institutional' : isOwnership(record) ? 'Ownership' : String(record.source_group || 'Source').replace(/^SEC\s+/i, '');
     lanePill.classList.add(isProposedSale(record) ? 'lane-proposed' : isInstitutional(record) ? 'lane-institutional' : isOwnership(record) ? 'lane-ownership' : 'lane-insider');
   }
-  const filingPill = node.querySelector('.filing-pill');
+  const filingPill = q('.filing-pill');
   if (filingPill) filingPill.textContent = record.filing_type || normalizeFilingType(record.source_form || record.source_type);
 
-  const grade = node.querySelector('.grade-pill');
-  grade.textContent = `Evidence ${record.evidence_grade}`;
-  grade.classList.add(`grade-${String(record.evidence_grade).toLowerCase().charAt(0)}`);
+  const grade = q('.grade-pill');
+  if (grade) { grade.textContent = `Evidence ${record.evidence_grade}`; grade.classList.add(`grade-${String(record.evidence_grade).toLowerCase().charAt(0)}`); }
 
-  const action = node.querySelector('.action-pill');
-  action.textContent = record.actionability;
-  action.classList.add(actionClass(record.actionability));
+  const action = q('.action-pill');
+  if (action) { action.textContent = record.actionability; action.classList.add(actionClass(record.actionability)); }
 
-  node.querySelector('.freshness-pill').textContent = record.freshness;
-  node.querySelector('.filer').textContent = record.filer;
-  node.querySelector('.source').textContent = record.source_type || record.source_form;
-  node.querySelector('.filed').textContent = formatDate(record.filed_date);
-  const vital = node.querySelector('.vital-point');
+  setText(q('.freshness-pill'), record.freshness);
+  setText(q('.filer'), record.filer);
+  setText(q('.source'), record.source_type || record.source_form);
+  setText(q('.filed'), formatDate(record.filed_date));
+  const vital = q('.vital-point');
   if (vital) vital.textContent = record.vital_point || `${record.event_type || 'Record'} for ${record.ticker || '-'}.`;
-  const extractionStatus = node.querySelector('.extraction-status');
+  const extractionStatus = q('.extraction-status');
   if (extractionStatus) extractionStatus.textContent = extractionLabel(record);
-  renderDl(node.querySelector('.key-figures'), record.key_figures);
-  renderDl(node.querySelector('.person-entity'), record.person_entity);
-  renderDl(node.querySelector('.source-trust'), record.source_trust);
-  node.querySelector('.caveat').textContent = record.caveat;
-  node.querySelector('.method-line').textContent = methodologyLine(record);
+  renderDl(q('.key-figures'), record.key_figures);
+  renderDl(q('.person-entity'), record.person_entity);
+  renderDl(q('.source-trust'), record.source_trust);
+  setText(q('.caveat'), record.caveat);
+  setText(q('.method-line'), methodologyLine(record));
 
-  const badge = node.querySelector('.watchlist-badge');
-  if (!record.watchlist_match) badge.classList.add('hidden');
+  const badge = q('.watchlist-badge');
+  if (badge && !record.watchlist_match) badge.classList.add('hidden');
 
-  fillList(node.querySelector('.rank-reasons'), record.rank_reasons);
-  fillList(node.querySelector('.does-not-prove'), record.does_not_prove);
+  fillList(q('.rank-reasons'), record.rank_reasons);
+  fillList(q('.does-not-prove'), record.does_not_prove);
 
-  const source = node.querySelector('.source-link');
-  source.href = record.source_url;
-  source.textContent = 'View source record';
+  const source = q('.source-link');
+  if (source) { source.href = record.source_url; source.textContent = 'View source record'; }
 
   setExpanded(node, button, indicator, expanded);
   button.addEventListener('click', () => {
@@ -791,11 +837,27 @@ function createCard(record, expanded = false) {
   return node;
 }
 
+
+function createFallbackCard(record) {
+  const article = document.createElement('article');
+  article.className = 'record-card soft-card expanded';
+  article.innerHTML = `
+    <div class="record-summary fallback-summary">
+      <div class="summary-main">
+        <div class="summary-topline"><span class="ticker">${escapeHtml(record.ticker || '-')}</span><span class="event-title">${escapeHtml(record.event_type || 'Public Record')}</span></div>
+        <p class="company-line">${escapeHtml(record.company || '-')}</p>
+      </div>
+      <div class="summary-badges"><span class="lane-pill">${escapeHtml(record.source_group || '-')}</span><span class="filing-pill">${escapeHtml(record.filing_type || '-')}</span><span class="score-pill">Score ${escapeHtml(String(record.score || 0))}</span></div>
+    </div>
+    <div class="record-details"><p class="vital-point">${escapeHtml(record.vital_point || record.caveat || 'Record loaded; source review required.')}</p></div>`;
+  return article;
+}
+
 function setExpanded(node, button, indicator, expanded) {
   node.classList.toggle('collapsed', !expanded);
   node.classList.toggle('expanded', expanded);
-  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  indicator.textContent = expanded ? 'Collapse' : 'Expand';
+  if (button) button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  if (indicator) indicator.textContent = expanded ? 'Collapse' : 'Expand';
 }
 
 function actionClass(actionability) {
@@ -817,6 +879,7 @@ function methodologyLine(record) {
 }
 
 function fillList(list, items = []) {
+  if (!list) return;
   list.innerHTML = '';
   for (const item of items) {
     const li = document.createElement('li');
