@@ -548,3 +548,84 @@ td a { color: var(--teal); }
 .control-block select#filingTypeFilter {
   border-color: rgba(88,215,255,.24);
 }
+
+/* Capital Trace v0.8 trust layer additions */
+.lane-health,
+.trace-brief {
+  display: grid;
+  gap: 10px;
+}
+
+.lane-health-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.lane-health-row > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lane-health-row strong,
+.lane-health-row span {
+  display: block;
+  color: rgba(226, 232, 240, 0.96);
+  font-size: 0.82rem;
+  line-height: 1.15;
+  text-transform: capitalize;
+}
+
+.lane-health-row small,
+.lane-note,
+.lane-error,
+.trace-brief p,
+.empty-mini {
+  margin: 0;
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.lane-note,
+.trace-note {
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  padding-top: 7px;
+}
+
+.lane-error {
+  color: rgba(252, 165, 165, 0.95);
+}
+
+.lane-status-ok,
+.lane-status-partial {
+  border-color: rgba(45, 212, 191, 0.28);
+}
+
+.lane-status-checked_no_records {
+  border-color: rgba(250, 204, 21, 0.26);
+}
+
+.lane-status-failed {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.record-card.highlight-match {
+  border-color: rgba(34, 211, 238, 0.85) !important;
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.24), 0 0 24px rgba(34, 211, 238, 0.14);
+}
+
+.record-card.highlight-match .filing-pill {
+  border-color: rgba(34, 211, 238, 0.7);
+  color: rgba(207, 250, 254, 0.98);
+}
+
+.control-block select#displayModeFilter,
+.control-block select#timeWindowFilter {
+  width: 100%;
+}

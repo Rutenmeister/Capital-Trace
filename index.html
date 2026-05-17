@@ -17,7 +17,7 @@
           <p class="header-copy">Public records of capital movement, traced to the source. Evidence-ranked research only, not investment advice.</p>
         </div>
         <div class="header-actions">
-          <div class="release-stamp">Capital Trace v0.7b · Ownership Lane</div>
+          <div class="release-stamp">Capital Trace v0.8 · Universal SEC Filing Engine</div>
           <div class="action-grid">
             <button id="refreshButton" type="button" class="primary-action">Check Now</button>
             <button id="exportButton" type="button" class="chip-button">Download CSV</button>
@@ -61,6 +61,25 @@
           <label class="control-block">
             <span class="tiny-label">Filing type</span>
             <select id="filingTypeFilter"><option value="all">All filing types</option></select>
+          </label>
+
+          <label class="control-block">
+            <span class="tiny-label">Time window</span>
+            <select id="timeWindowFilter">
+              <option value="all">All loaded records</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="60" selected>Last 60 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </label>
+
+          <label class="control-block">
+            <span class="tiny-label">Filing display mode</span>
+            <select id="displayModeFilter">
+              <option value="filter">Filter records</option>
+              <option value="highlight">Highlight matches</option>
+            </select>
           </label>
 
           <label class="control-block">
@@ -157,6 +176,16 @@
             </div>
           </div>
 
+          <div class="soft-card readout-card lane-health-card">
+            <div class="tiny-label">Lane Health</div>
+            <div id="laneHealth" class="lane-health">Loading lane diagnostics...</div>
+          </div>
+
+          <div class="soft-card readout-card trace-brief-card">
+            <div class="tiny-label">Current Trace Brief</div>
+            <div id="traceBrief" class="trace-brief">Waiting for loaded records and diagnostics.</div>
+          </div>
+
           <div class="soft-card readout-card">
             <div class="tiny-label">Evidence language</div>
             <div class="readout-grid">
@@ -208,14 +237,14 @@
             <article class="soft-card"><div class="tiny-label">Score</div><p>Records are scored by event type, directness, role significance, transaction size, watchlist relevance, source quality, and uncertainty penalties.</p></article>
             <article class="soft-card"><div class="tiny-label">Evidence Grade</div><p>A-grade records are direct, recent, exact, and source-linked. Lower grades indicate delay, ambiguity, administrative noise, or weaker signal value.</p></article>
             <article class="soft-card"><div class="tiny-label">Actionability</div><p>Actionability is a research label, not investment advice. It compresses the record into Research Now, Watch, Context Only, or Low Signal.</p></article>
-            <article class="soft-card"><div class="tiny-label">Limits</div><p>Capital Trace does not predict price movement, infer intent, or replace due diligence. It organizes public records and preserves caveats.</p></article>
+            <article class="soft-card"><div class="tiny-label">Lane diagnostics</div><p>Each refresh reports what forms were checked, the lookback window, records added, and whether a lane found no records or failed.</p></article>
           </div>
         </details>
       </section>
 
       <footer class="glass footer-note">
-        <div><strong>Capital Trace v0.7b</strong></div>
-        <div>Hosted SEC Form 4 + 13D/G ownership watchlist prototype. GitHub Actions refreshes data/capital_trace.json; dashboard check reloads the saved record file.</div>
+        <div><strong>Capital Trace v0.8</strong></div>
+        <div>Universal SEC watchlist prototype. GitHub Actions runs a sequential SEC refresh, writes lane diagnostics, and updates data/capital_trace.json for the dashboard.</div>
       </footer>
     </div>
   </main>

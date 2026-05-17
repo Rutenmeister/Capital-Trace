@@ -1,67 +1,90 @@
-# Capital Trace v0.7 — SEC Ownership Lane
+# Capital Trace v0.8 — Universal SEC Filing Engine + Trust Layer
 
-Capital Trace is an Edgefield Research prototype for turning public records of capital movement into an evidence-ranked research queue.
+Capital Trace is an Edgefield research module: **public records of capital movement, traced to the source**.
 
-This version preserves the v0.6a hosted dashboard and adds the next SEC lane:
+This version preserves the working Evidence Queue UI and adds a more professional SEC refresh foundation.
 
-- **SEC Form 4** insider activity
-- **SEC Schedule 13D / 13G** ownership threshold records
+## Current architecture
 
-The dashboard still reads `data/capital_trace.json`. GitHub Actions runs the refresh job hourly and rewrites the data file. The website never calls SEC directly from a visitor browser.
+```text
+SEC watchlist
+  -> universal SEC refresh script
+  -> Form 4 normalizer
+  -> 13D/G ownership normalizer
+  -> normalized Capital Trace records
+  -> lane diagnostics
+  -> data/capital_trace.json
+  -> static dashboard
+```
 
-## Upload note
+## Supported lanes in v0.8
 
-If your live data is already working, do **not** upload the `data/` folder when applying this update unless you intentionally want to reset the data file.
+- **Insider lane**: Form 4 / 4/A
+- **Ownership lane**: SC 13D, SC 13D/A, SC 13G, SC 13G/A
 
-For the v0.7 update, upload:
+The system remains **watchlist-based**. It does not scan the entire SEC universe.
+
+## Lookback
+
+Default lookback is **60 days**. The GitHub Action passes:
+
+```text
+CAPITAL_TRACE_LOOKBACK_DAYS=60
+```
+
+The frontend also includes a time-window filter:
+
+- All loaded records
+- Last 7 days
+- Last 30 days
+- Last 60 days
+- Last 90 days
+
+## Trust layer
+
+The generated JSON now includes `lane_diagnostics`, so the UI can say honestly:
+
+- what lane ran
+- what forms were checked
+- how many companies were checked
+- how many filings were seen/matched
+- how many records were added
+- whether a lane found no records or failed
+
+No fake records should be created. If a lane finds zero records, the UI should say so.
+
+## Upload guidance
+
+For normal code updates, upload these files only:
 
 ```text
 index.html
 style.css
 app.js
 README.md
+schema/capital_trace_record.schema.json
+scripts/refresh_capital_trace.py
 scripts/refresh_sec_form4.py
 scripts/refresh_sec_ownership.py
-scripts/refresh_capital_trace.py
 .github/workflows/refresh-capital-trace.yml
 ```
 
-If your computer hides `.github`, create or edit this file directly in GitHub:
+Do **not** upload the `data/` folder unless intentionally resetting live data.
+
+## GitHub Action
+
+The workflow runs:
 
 ```text
-.github/workflows/refresh-capital-trace.yml
+python scripts/refresh_capital_trace.py
 ```
 
-## Run once after upload
+The script runs lanes sequentially and commits once at the end.
 
-After committing the files:
+## Integrity rules
 
-```text
-Actions → Refresh Capital Trace → Run workflow
-```
-
-Wait for a green check, then open the live page and hard-refresh:
-
-```text
-Ctrl + Shift + R
-```
-
-## Data mode expected after v0.7 refresh
-
-After the workflow runs, `data/capital_trace.json` should show:
-
-```json
-"data_mode": "sec-watchlist-multilane"
-```
-
-and `coverage_lanes` should include:
-
-```json
-["SEC Form 4", "SEC 13D/G"]
-```
-
-## Important caveat
-
-SEC Schedule 13D/G records are less standardized than Form 4 records. This lane is conservative and source-linked. Any extracted issuer, filer, or ownership percentage should be verified against the original SEC filing before use.
-
-Capital Trace is research software only. It is not investment advice, a signal service, or a prediction engine.
+- Do not fabricate missing filings.
+- Do not label a 13D record as activist unless the source clearly supports it.
+- If a lane fails, report it in diagnostics.
+- If no new records are produced and previous live records exist, preserve the previous live records instead of overwriting with an empty file.
+- Website users load the saved JSON; their browser does not directly call SEC.

@@ -37,9 +37,9 @@ OUTPUT_JS = DATA_DIR / "capital_trace_data.js"
 
 USER_AGENT = os.environ.get("CAPITAL_TRACE_USER_AGENT", "CapitalTrace/0.6 contact@example.com")
 REQUEST_DELAY_SECONDS = float(os.environ.get("CAPITAL_TRACE_REQUEST_DELAY", "0.25"))
-MAX_FORM4_PER_COMPANY = int(os.environ.get("CAPITAL_TRACE_MAX_FORM4_PER_COMPANY", "12"))
-LOOKBACK_DAYS = int(os.environ.get("CAPITAL_TRACE_LOOKBACK_DAYS", "120"))
-MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "150"))
+MAX_FORM4_PER_COMPANY = int(os.environ.get("CAPITAL_TRACE_MAX_FORM4_PER_COMPANY", "30"))
+LOOKBACK_DAYS = int(os.environ.get("CAPITAL_TRACE_LOOKBACK_DAYS", "60"))
+MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "500"))
 
 SEC_DATA = "https://data.sec.gov"
 SEC_ARCHIVES = "https://www.sec.gov/Archives/edgar/data"
@@ -535,21 +535,51 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company]) -> No
     print(f"[OK] wrote {OUTPUT_JSON.relative_to(ROOT)} with {len(records)} records")
 
 
-def collect_form4_records(companies: List[Company]) -> List[Dict[str, Any]]:
+def collect_form4_records(companies: List[Company], diagnostics: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     all_records: List[Dict[str, Any]] = []
     seen: set[str] = set()
 
+    if diagnostics is not None:
+        diagnostics["status"] = "running"
+        diagnostics["companies_checked"] = 0
+        diagnostics["forms_checked"] = ["4", "4/A"]
+        diagnostics["lookback_days"] = LOOKBACK_DAYS
+        diagnostics["filings_seen"] = 0
+        diagnostics["filings_matched"] = 0
+        diagnostics.setdefault("errors", [])
+
     for company in companies:
         print(f"[INFO] {company.ticker} CIK {company.cik10}")
-        filings = recent_filings(company)
+        if diagnostics is not None:
+            diagnostics["companies_checked"] += 1
+        try:
+            filings = recent_filings(company)
+        except Exception as exc:
+            if diagnostics is not None:
+                diagnostics["errors"].append(f"{company.ticker}: recent Form 4 lookup failed: {type(exc).__name__}: {exc}")
+            continue
         print(f"[INFO]   recent Form 4 filings: {len(filings)}")
+        if diagnostics is not None:
+            diagnostics["filings_seen"] += len(filings)
+            diagnostics["filings_matched"] += len(filings)
         for filing in filings:
-            for record in parse_form4(company, filing):
+            try:
+                parsed = parse_form4(company, filing)
+            except Exception as exc:
+                if diagnostics is not None:
+                    diagnostics["errors"].append(f"{company.ticker} {filing.get('accession')}: Form 4 parse failed: {type(exc).__name__}: {exc}")
+                continue
+            for record in parsed:
                 rid = record.get("record_id")
                 if rid in seen:
                     continue
                 seen.add(rid)
+                # v0.8 normalized filing type field for frontend controls
+                form = str(record.get("source_form") or filing.get("form") or "4").upper()
+                record["filing_type"] = "Form 4/A" if form == "4/A" else "Form 4"
                 all_records.append(record)
+    if diagnostics is not None:
+        diagnostics["records_added"] = len(all_records)
     return all_records
 
 

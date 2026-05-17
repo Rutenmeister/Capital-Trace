@@ -16,6 +16,8 @@ const els = {
   typeFilter: document.querySelector('#typeFilter'),
   sourceFilter: document.querySelector('#sourceFilter'),
   filingTypeFilter: document.querySelector('#filingTypeFilter'),
+  timeWindowFilter: document.querySelector('#timeWindowFilter'),
+  displayModeFilter: document.querySelector('#displayModeFilter'),
   actionFilter: document.querySelector('#actionFilter'),
   focusFilter: document.querySelector('#focusFilter'),
   minScore: document.querySelector('#minScore'),
@@ -41,6 +43,8 @@ const els = {
   nextSecCheck: document.querySelector('#nextSecCheck'),
   dataMode: document.querySelector('#dataMode'),
   sourceCoverage: document.querySelector('#sourceCoverage'),
+  laneHealth: document.querySelector('#laneHealth'),
+  traceBrief: document.querySelector('#traceBrief'),
   template: document.querySelector('#recordCardTemplate'),
 };
 
@@ -138,6 +142,11 @@ function preparePayload(payload) {
     refresh_frequency: raw.refresh_frequency || (raw.metadata && raw.metadata.refresh_frequency),
     source_groups: raw.source_groups || raw.coverage_lanes || (raw.metadata && (raw.metadata.source_groups || raw.metadata.coverage_lanes)),
     methodology_version: raw.methodology_version || (raw.metadata && raw.metadata.methodology_version),
+    lane_diagnostics: raw.lane_diagnostics || (raw.metadata && raw.metadata.lane_diagnostics),
+    lookback_days: raw.lookback_days || (raw.metadata && raw.metadata.lookback_days),
+    supported_forms: raw.supported_forms || (raw.metadata && raw.metadata.supported_forms),
+    counts_by_lane: raw.counts_by_lane || (raw.metadata && raw.metadata.counts_by_lane),
+    counts_by_form: raw.counts_by_form || (raw.metadata && raw.metadata.counts_by_form),
   };
 
   return { metadata, records };
@@ -157,7 +166,12 @@ function normalizeMetadata(metadata, source) {
     last_sec_check: lastSecCheck,
     next_scheduled_check: metadata.next_scheduled_check || estimateNextHourlyCheck(lastSecCheck || lastRefreshed),
     source_groups: metadata.source_groups || ['SEC Insider Ownership', 'SEC Ownership Thresholds'],
-    methodology_version: metadata.methodology_version || '0.7'
+    methodology_version: metadata.methodology_version || '0.8',
+    lane_diagnostics: metadata.lane_diagnostics || {},
+    lookback_days: metadata.lookback_days || 60,
+    supported_forms: metadata.supported_forms || [],
+    counts_by_lane: metadata.counts_by_lane || {},
+    counts_by_form: metadata.counts_by_form || {},
   };
 }
 
@@ -273,7 +287,10 @@ function recalibrateRecord(record) {
   let adjustedScore = originalScore;
   const role = roleShort(next.role);
 
-  if (isPurchase(next)) {
+  if (isOwnership(next)) {
+    // Do not force ownership records into insider purchase/sale logic.
+    adjustedScore = originalScore;
+  } else if (isPurchase(next)) {
     if (!/purchase/i.test(next.event_type)) next.event_type = `${role} Open-Market Purchase`;
     else if (!/^(CEO|CFO|Director|10% Owner)/.test(next.event_type)) next.event_type = `${role} ${next.event_type}`;
     adjustedScore = Math.min(100, originalScore + (role === 'CEO' || role === 'CFO' ? 4 : 0));
@@ -286,7 +303,11 @@ function recalibrateRecord(record) {
 
   next.score = Math.max(0, Math.min(100, Math.round(adjustedScore)));
 
-  if (isPurchase(next) && next.score >= 84 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
+  if (isOwnership(next) && next.score >= 84 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
+    next.actionability = 'Research Now';
+  } else if (isOwnership(next) && next.score >= 62) {
+    next.actionability = 'Watch';
+  } else if (isPurchase(next) && next.score >= 84 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
     next.actionability = 'Research Now';
   } else if (isPurchase(next) && next.score >= 62) {
     next.actionability = 'Watch';
@@ -388,7 +409,11 @@ function populateFilingTypeFilter() {
   if (!els.filingTypeFilter) return;
   const current = els.filingTypeFilter.value;
   const counts = countBy(state.records, (record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type));
-  const filingTypes = [...counts.keys()].sort((a, b) => {
+  const supported = Array.isArray(state.metadata.supported_forms)
+    ? state.metadata.supported_forms.map(normalizeFilingType)
+    : [];
+  const allTypes = new Set([...supported, ...counts.keys()]);
+  const filingTypes = [...allTypes].filter(Boolean).sort((a, b) => {
     const order = ['Form 4', 'Form 4/A', 'SC 13D', 'SC 13D/A', 'SC 13G', 'SC 13G/A', '13F-HR', 'Unknown'];
     const ai = order.indexOf(a);
     const bi = order.indexOf(b);
@@ -399,10 +424,33 @@ function populateFilingTypeFilter() {
   for (const filingType of filingTypes) {
     const option = document.createElement('option');
     option.value = filingType;
-    option.textContent = optionLabelWithCount(filingType, counts.get(filingType));
+    option.textContent = optionLabelWithCount(filingType, counts.get(filingType) || 0);
     els.filingTypeFilter.appendChild(option);
   }
   els.filingTypeFilter.value = filingTypes.includes(current) ? current : 'all';
+}
+
+function recordWithinWindow(record, selectedTimeWindow) {
+  if (!selectedTimeWindow || selectedTimeWindow === 'all') return true;
+  const days = Number(selectedTimeWindow);
+  if (!Number.isFinite(days) || days <= 0) return true;
+  const rawDate = record.filed_date || record.event_date || record.transaction_date || record.period_end;
+  const date = new Date(rawDate);
+  if (Number.isNaN(date.getTime())) return true;
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return date.getTime() >= cutoff;
+}
+
+function selectedHighlightFilingType() {
+  const selectedFilingType = els.filingTypeFilter ? els.filingTypeFilter.value : 'all';
+  const displayMode = els.displayModeFilter ? els.displayModeFilter.value : 'filter';
+  return displayMode === 'highlight' && selectedFilingType !== 'all' ? selectedFilingType : null;
+}
+
+function recordMatchesHighlight(record) {
+  const selected = selectedHighlightFilingType();
+  if (!selected) return false;
+  return (record.filing_type || normalizeFilingType(record.source_form || record.source_type)) === selected;
 }
 
 function applyFilters() {
@@ -410,6 +458,8 @@ function applyFilters() {
   const selectedType = els.typeFilter.value;
   const selectedSource = els.sourceFilter ? els.sourceFilter.value : 'all';
   const selectedFilingType = els.filingTypeFilter ? els.filingTypeFilter.value : 'all';
+  const selectedTimeWindow = els.timeWindowFilter ? els.timeWindowFilter.value : 'all';
+  const displayMode = els.displayModeFilter ? els.displayModeFilter.value : 'filter';
   const selectedAction = els.actionFilter.value;
   const selectedFocus = els.focusFilter ? els.focusFilter.value : 'all';
   const minimumScore = Number(els.minScore.value || 0);
@@ -436,7 +486,8 @@ function applyFilters() {
     if (query && !haystack.includes(query)) return false;
     if (selectedType !== 'all' && record.record_type !== selectedType) return false;
     if (selectedSource !== 'all' && (record.source_group || record.source_type) !== selectedSource) return false;
-    if (selectedFilingType !== 'all' && (record.filing_type || normalizeFilingType(record.source_form || record.source_type)) !== selectedFilingType) return false;
+    if (selectedFilingType !== 'all' && displayMode === 'filter' && (record.filing_type || normalizeFilingType(record.source_form || record.source_type)) !== selectedFilingType) return false;
+    if (!recordWithinWindow(record, selectedTimeWindow)) return false;
     if (selectedAction !== 'all' && record.actionability !== selectedAction) return false;
     if (Number(record.score || 0) < minimumScore) return false;
     if (watchlistOnly && !record.watchlist_match) return false;
@@ -483,6 +534,56 @@ function updateBrief() {
   if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
   if (els.dataMode) els.dataMode.textContent = state.metadata.data_mode || '-';
   if (els.sourceCoverage) els.sourceCoverage.textContent = `${(state.metadata.source_groups || []).length} lanes / ${filingTypeCount} forms`;
+  renderLaneHealth();
+  renderTraceBrief();
+}
+
+function laneStatusLabel(status) {
+  return {
+    ok: 'Live',
+    checked_no_records: 'Checked, no records',
+    partial: 'Partial',
+    failed: 'Failed',
+    disabled: 'Disabled',
+    stale: 'Stale',
+    running: 'Running',
+  }[status] || String(status || 'Unknown');
+}
+
+function renderLaneHealth() {
+  if (!els.laneHealth) return;
+  const diagnostics = state.metadata.lane_diagnostics || {};
+  const entries = Object.entries(diagnostics);
+  if (!entries.length) {
+    els.laneHealth.innerHTML = '<p class="empty-mini">No lane diagnostics found in the current data file.</p>';
+    return;
+  }
+  els.laneHealth.innerHTML = entries.map(([key, diag]) => {
+    const status = diag.status || 'unknown';
+    const forms = Array.isArray(diag.forms_checked) ? diag.forms_checked.join(', ') : '-';
+    const errors = Array.isArray(diag.errors) ? diag.errors.length : 0;
+    return `<div class="lane-health-row lane-status-${escapeHtml(status)}">
+      <div><strong>${escapeHtml(key.replaceAll('_', ' '))}</strong><small>${escapeHtml(forms)}</small></div>
+      <div><span>${escapeHtml(laneStatusLabel(status))}</span><small>${Number(diag.records_added || 0)} records · ${Number(diag.companies_checked || 0)} companies · ${Number(diag.lookback_days || state.metadata.lookback_days || 0)}d</small></div>
+      ${errors ? `<p class="lane-error">${errors} error${errors === 1 ? '' : 's'} logged. Review workflow output.</p>` : ''}
+      ${diag.note ? `<p class="lane-note">${escapeHtml(diag.note)}</p>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderTraceBrief() {
+  if (!els.traceBrief) return;
+  const countsByForm = state.metadata.counts_by_form && Object.keys(state.metadata.counts_by_form).length
+    ? state.metadata.counts_by_form
+    : Object.fromEntries(countBy(state.records, (record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type)));
+  const formText = Object.entries(countsByForm)
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+    .map(([form, count]) => `${escapeHtml(form)}: ${Number(count)}`)
+    .join(' · ') || 'No filing counts available';
+  els.traceBrief.innerHTML = `<p><strong>${state.records.length}</strong> records loaded across <strong>${(state.metadata.source_groups || []).length}</strong> visible source lane${(state.metadata.source_groups || []).length === 1 ? '' : 's'}.</p>
+    <p>Lookback: <strong>${escapeHtml(state.metadata.lookback_days || 'unknown')}</strong> days · Data mode: <strong>${escapeHtml(state.metadata.data_mode || '-')}</strong></p>
+    <p>${formText}</p>
+    <p class="trace-note">Current coverage is SEC watchlist only, not the full SEC universe.</p>`;
 }
 
 function renderAll() {
@@ -497,10 +598,32 @@ function renderAll() {
   els.tableCount.textContent = countText;
 }
 
+function activeEmptyStateMessage(defaultMessage) {
+  const selectedFilingType = els.filingTypeFilter ? els.filingTypeFilter.value : 'all';
+  const selectedSource = els.sourceFilter ? els.sourceFilter.value : 'all';
+  const selectedTimeWindow = els.timeWindowFilter ? els.timeWindowFilter.value : 'all';
+  if (selectedFilingType === 'all' && selectedSource === 'all') return defaultMessage;
+  const parts = [];
+  if (selectedFilingType !== 'all') parts.push(`filing type ${selectedFilingType}`);
+  if (selectedSource !== 'all') parts.push(`source lane ${selectedSource}`);
+  if (selectedTimeWindow !== 'all') parts.push(`last ${selectedTimeWindow} days`);
+  const diagnosticHint = diagnosticSummaryText();
+  return `No records match ${parts.join(' / ')}. ${diagnosticHint}`;
+}
+
+function diagnosticSummaryText() {
+  const diagnostics = state.metadata.lane_diagnostics || {};
+  const ownership = diagnostics.ownership_13d_13g;
+  if (ownership) {
+    return `Ownership lane status: ${laneStatusLabel(ownership.status)}; checked ${ownership.companies_checked || 0} companies over ${ownership.lookback_days || state.metadata.lookback_days || '?'} days; records added: ${ownership.records_added || 0}.`;
+  }
+  return 'No lane diagnostics are available in this data file.';
+}
+
 function renderCards(container, records, emptyMessage, openFirst = false) {
   container.innerHTML = '';
   if (!records.length) {
-    container.innerHTML = `<p class="empty-state">${emptyMessage}</p>`;
+    container.innerHTML = `<p class="empty-state">${escapeHtml(activeEmptyStateMessage(emptyMessage))}</p>`;
     return;
   }
   records.forEach((record, index) => {
@@ -510,6 +633,7 @@ function renderCards(container, records, emptyMessage, openFirst = false) {
 
 function createCard(record, expanded = false) {
   const node = els.template.content.firstElementChild.cloneNode(true);
+  if (recordMatchesHighlight(record)) node.classList.add('highlight-match');
   const button = node.querySelector('.record-summary');
   const indicator = node.querySelector('.expand-indicator');
 
@@ -680,6 +804,8 @@ els.searchInput.addEventListener('input', applyFilters);
 els.typeFilter.addEventListener('change', applyFilters);
 if (els.sourceFilter) els.sourceFilter.addEventListener('change', applyFilters);
 if (els.filingTypeFilter) els.filingTypeFilter.addEventListener('change', applyFilters);
+if (els.timeWindowFilter) els.timeWindowFilter.addEventListener('change', applyFilters);
+if (els.displayModeFilter) els.displayModeFilter.addEventListener('change', applyFilters);
 els.actionFilter.addEventListener('change', applyFilters);
 if (els.focusFilter) els.focusFilter.addEventListener('change', applyFilters);
 els.minScore.addEventListener('input', applyFilters);

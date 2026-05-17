@@ -42,7 +42,7 @@ from refresh_sec_form4 import (
 )
 
 OWNERSHIP_FORMS = {"SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"}
-MAX_OWNERSHIP_PER_COMPANY = 8
+MAX_OWNERSHIP_PER_COMPANY = 20
 
 
 def strip_tags(text: str) -> str:
@@ -356,22 +356,58 @@ def parse_ownership_record(company: Company, filing: Dict[str, Any]) -> Optional
     }
 
 
-def collect_ownership_records(companies: List[Company]) -> List[Dict[str, Any]]:
+def collect_ownership_records(companies: List[Company], diagnostics: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     all_records: List[Dict[str, Any]] = []
     seen: set[str] = set()
+
+    if diagnostics is not None:
+        diagnostics["status"] = "running"
+        diagnostics["companies_checked"] = 0
+        diagnostics["forms_checked"] = sorted(OWNERSHIP_FORMS)
+        diagnostics["lookback_days"] = LOOKBACK_DAYS
+        diagnostics["filings_seen"] = 0
+        diagnostics["filings_matched"] = 0
+        diagnostics.setdefault("errors", [])
+
     for company in companies:
         print(f"[INFO] {company.ticker} ownership lane")
-        filings = recent_ownership_filings(company)
+        if diagnostics is not None:
+            diagnostics["companies_checked"] += 1
+        try:
+            filings = recent_ownership_filings(company)
+        except Exception as exc:
+            if diagnostics is not None:
+                diagnostics["errors"].append(f"{company.ticker}: 13D/G lookup failed: {type(exc).__name__}: {exc}")
+            continue
         print(f"[INFO]   recent 13D/G filings: {len(filings)}")
+        if diagnostics is not None:
+            diagnostics["filings_seen"] += len(filings)
+            diagnostics["filings_matched"] += len(filings)
         for filing in filings:
-            record = parse_ownership_record(company, filing)
+            try:
+                record = parse_ownership_record(company, filing)
+            except Exception as exc:
+                if diagnostics is not None:
+                    diagnostics["errors"].append(f"{company.ticker} {filing.get('accession')}: 13D/G parse failed: {type(exc).__name__}: {exc}")
+                continue
             if not record:
                 continue
             rid = record.get("record_id")
             if rid in seen:
                 continue
             seen.add(rid)
+            form = str(record.get("source_form") or filing.get("form") or "").upper().strip()
+            if "13D/A" in form:
+                record["filing_type"] = "SC 13D/A"
+            elif "13G/A" in form:
+                record["filing_type"] = "SC 13G/A"
+            elif "13D" in form:
+                record["filing_type"] = "SC 13D"
+            elif "13G" in form:
+                record["filing_type"] = "SC 13G"
             all_records.append(record)
+    if diagnostics is not None:
+        diagnostics["records_added"] = len(all_records)
     return all_records
 
 
