@@ -15,6 +15,7 @@ const els = {
   searchInput: document.querySelector('#searchInput'),
   typeFilter: document.querySelector('#typeFilter'),
   sourceFilter: document.querySelector('#sourceFilter'),
+  filingFilter: document.querySelector('#filingFilter'),
   actionFilter: document.querySelector('#actionFilter'),
   focusFilter: document.querySelector('#focusFilter'),
   minScore: document.querySelector('#minScore'),
@@ -344,10 +345,37 @@ function populateSourceFilter() {
   if (groups.includes(current)) els.sourceFilter.value = current;
 }
 
+function filingTypeLabel(record) {
+  const raw = String(record.source_form || record.source_type || '').trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes('13d/a')) return 'Schedule 13D/A';
+  if (lower.includes('13g/a')) return 'Schedule 13G/A';
+  if (lower.includes('13d')) return 'Schedule 13D';
+  if (lower.includes('13g')) return 'Schedule 13G';
+  if (lower.includes('form 4')) return 'Form 4';
+  if (lower.includes('13f')) return '13F';
+  return raw || 'Unknown';
+}
+
+function populateFilingFilter() {
+  if (!els.filingFilter) return;
+  const current = els.filingFilter.value;
+  const filings = [...new Set(state.records.map(filingTypeLabel))].sort();
+  els.filingFilter.innerHTML = '<option value="all">All filing types</option>';
+  for (const filing of filings) {
+    const option = document.createElement('option');
+    option.value = filing;
+    option.textContent = filing;
+    els.filingFilter.appendChild(option);
+  }
+  if (filings.includes(current)) els.filingFilter.value = current;
+}
+
 function applyFilters() {
   const query = els.searchInput.value.trim().toLowerCase();
   const selectedType = els.typeFilter.value;
   const selectedSource = els.sourceFilter ? els.sourceFilter.value : 'all';
+  const selectedFiling = els.filingFilter ? els.filingFilter.value : 'all';
   const selectedAction = els.actionFilter.value;
   const selectedFocus = els.focusFilter ? els.focusFilter.value : 'all';
   const minimumScore = Number(els.minScore.value || 0);
@@ -374,6 +402,7 @@ function applyFilters() {
     if (query && !haystack.includes(query)) return false;
     if (selectedType !== 'all' && record.record_type !== selectedType) return false;
     if (selectedSource !== 'all' && (record.source_group || record.source_type) !== selectedSource) return false;
+    if (selectedFiling !== 'all' && filingTypeLabel(record) !== selectedFiling) return false;
     if (selectedAction !== 'all' && record.actionability !== selectedAction) return false;
     if (Number(record.score || 0) < minimumScore) return false;
     if (watchlistOnly && !record.watchlist_match) return false;
