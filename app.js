@@ -14,7 +14,9 @@ const els = {
   exportButton: document.querySelector('#exportButton'),
   searchInput: document.querySelector('#searchInput'),
   typeFilter: document.querySelector('#typeFilter'),
+  sourceFilter: document.querySelector('#sourceFilter'),
   actionFilter: document.querySelector('#actionFilter'),
+  focusFilter: document.querySelector('#focusFilter'),
   minScore: document.querySelector('#minScore'),
   minScoreValue: document.querySelector('#minScoreValue'),
   watchlistOnly: document.querySelector('#watchlistOnly'),
@@ -81,7 +83,7 @@ async function loadRecords(options = {}) {
 
   try {
     const prepared = preparePayload(payload);
-    const normalizedRecords = prepared.records.map(normalizeCapitalTraceRecord);
+    const normalizedRecords = prepared.records.map(normalizeCapitalTraceRecord).map(recalibrateRecord);
     const nextSignature = payloadSignature({ metadata: prepared.metadata, records: normalizedRecords });
     const previousSignature = state.payloadSignature;
     const previousIds = new Set(state.records.map((record) => record.record_id || record.id));
@@ -91,6 +93,7 @@ async function loadRecords(options = {}) {
     state.payloadSignature = nextSignature;
 
     populateTypeFilter();
+    populateSourceFilter();
     applyFilters();
     updateBrief();
 
@@ -151,8 +154,8 @@ function normalizeMetadata(metadata, source) {
     last_data_update: metadata.last_data_update || lastRefreshed,
     last_sec_check: lastSecCheck,
     next_scheduled_check: metadata.next_scheduled_check || estimateNextHourlyCheck(lastSecCheck || lastRefreshed),
-    source_groups: metadata.source_groups || ['sec-form-4-ready', 'sec-13f-ready', 'sec-13d-g-ready', 'congress-ready'],
-    methodology_version: metadata.methodology_version || '0.2'
+    source_groups: metadata.source_groups || ['SEC Insider Ownership', 'SEC Ownership Thresholds'],
+    methodology_version: metadata.methodology_version || '0.7'
   };
 }
 
@@ -188,8 +191,86 @@ function normalizeCapitalTraceRecord(record = {}) {
     rank_reasons: Array.isArray(record.rank_reasons) ? record.rank_reasons : [],
     does_not_prove: Array.isArray(record.does_not_prove) ? record.does_not_prove : [],
     caveat: record.caveat || 'Source record requires additional review before use.',
-    source_url: record.source_url || '#'
+    source_url: record.source_url || '#',
+    transaction_code: record.transaction_code || '',
+    transaction_value: Number(record.transaction_value || 0),
+    shares: Number(record.shares || 0),
+    price: Number(record.price || 0)
   };
+}
+
+function roleShort(role = '') {
+  const r = String(role).toLowerCase();
+  if (r.includes('chief executive') || r.includes('ceo') || r.includes('president')) return 'CEO';
+  if (r.includes('chief financial') || r.includes('cfo')) return 'CFO';
+  if (r.includes('director')) return 'Director';
+  if (r.includes('10%')) return '10% Owner';
+  return 'Insider';
+}
+
+function isPurchase(record) {
+  return String(record.transaction_code || '').toUpperCase() === 'P' || String(record.event_type || '').toLowerCase().includes('purchase');
+}
+
+function isSale(record) {
+  return String(record.transaction_code || '').toUpperCase() === 'S' || String(record.event_type || '').toLowerCase().includes('sale');
+}
+
+function isOwnership(record) {
+  const group = String(record.source_group || '').toLowerCase();
+  const type = String(record.record_type || '').toLowerCase();
+  const source = String(record.source_type || '').toLowerCase();
+  return group.includes('ownership threshold') || type.includes('ownership threshold') || source.includes('13d') || source.includes('13g');
+}
+
+function isAdministrative(record) {
+  const code = String(record.transaction_code || '').toUpperCase();
+  const event = String(record.event_type || '').toLowerCase();
+  return ['M','A','G'].includes(code) || event.includes('option') || event.includes('award') || event.includes('grant');
+}
+
+function recalibrateRecord(record) {
+  const next = { ...record };
+  const originalScore = Number(next.score || 0);
+  let adjustedScore = originalScore;
+  const role = roleShort(next.role);
+
+  if (isPurchase(next)) {
+    if (!/purchase/i.test(next.event_type)) next.event_type = `${role} Open-Market Purchase`;
+    else if (!/^(CEO|CFO|Director|10% Owner)/.test(next.event_type)) next.event_type = `${role} ${next.event_type}`;
+    adjustedScore = Math.min(100, originalScore + (role === 'CEO' || role === 'CFO' ? 4 : 0));
+  } else if (isSale(next)) {
+    next.event_type = role === 'Insider' ? 'Insider Sale' : `${role} Sale`;
+    adjustedScore = Math.min(originalScore, next.transaction_value >= 1000000 ? 72 : 64);
+  } else if (isAdministrative(next)) {
+    adjustedScore = Math.min(originalScore, 44);
+  }
+
+  next.score = Math.max(0, Math.min(100, Math.round(adjustedScore)));
+
+  if (isPurchase(next) && next.score >= 84 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
+    next.actionability = 'Research Now';
+  } else if (isPurchase(next) && next.score >= 62) {
+    next.actionability = 'Watch';
+  } else if (isSale(next)) {
+    next.actionability = next.score >= 68 ? 'Watch' : 'Context Only';
+  } else if (isAdministrative(next)) {
+    next.actionability = next.score >= 40 ? 'Context Only' : 'Low Signal';
+  } else if (next.score >= 78 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
+    next.actionability = 'Watch';
+  } else if (next.score >= 50) {
+    next.actionability = 'Context Only';
+  } else {
+    next.actionability = 'Low Signal';
+  }
+
+  if (isSale(next) && !next.rank_reasons.some(r => /sale/i.test(r))) {
+    next.rank_reasons.unshift('Sale disclosed; treated as context unless unusually strong');
+  }
+  if (isAdministrative(next) && !next.rank_reasons.some(r => /administrative|compensation|option/i.test(r))) {
+    next.rank_reasons.unshift('Administrative or compensation-related filing; lower signal value');
+  }
+  return next;
 }
 
 function inferSourceGroup(sourceType = '') {
@@ -249,10 +330,26 @@ function populateTypeFilter() {
   if (types.includes(current)) els.typeFilter.value = current;
 }
 
+function populateSourceFilter() {
+  if (!els.sourceFilter) return;
+  const current = els.sourceFilter.value;
+  const groups = [...new Set(state.records.map((record) => record.source_group || record.source_type || 'Unknown'))].sort();
+  els.sourceFilter.innerHTML = '<option value="all">All source lanes</option>';
+  for (const group of groups) {
+    const option = document.createElement('option');
+    option.value = group;
+    option.textContent = group;
+    els.sourceFilter.appendChild(option);
+  }
+  if (groups.includes(current)) els.sourceFilter.value = current;
+}
+
 function applyFilters() {
   const query = els.searchInput.value.trim().toLowerCase();
   const selectedType = els.typeFilter.value;
+  const selectedSource = els.sourceFilter ? els.sourceFilter.value : 'all';
   const selectedAction = els.actionFilter.value;
+  const selectedFocus = els.focusFilter ? els.focusFilter.value : 'all';
   const minimumScore = Number(els.minScore.value || 0);
   const watchlistOnly = els.watchlistOnly.checked;
   const hideLowSignal = els.hideLowSignal.checked;
@@ -276,12 +373,19 @@ function applyFilters() {
 
     if (query && !haystack.includes(query)) return false;
     if (selectedType !== 'all' && record.record_type !== selectedType) return false;
+    if (selectedSource !== 'all' && (record.source_group || record.source_type) !== selectedSource) return false;
     if (selectedAction !== 'all' && record.actionability !== selectedAction) return false;
     if (Number(record.score || 0) < minimumScore) return false;
     if (watchlistOnly && !record.watchlist_match) return false;
     if (hideLowSignal && record.actionability === 'Low Signal') return false;
+    if (selectedFocus === 'purchases' && !isPurchase(record)) return false;
+    if (selectedFocus === 'ownership' && !isOwnership(record)) return false;
     return true;
   });
+
+  if (selectedFocus === 'top10') {
+    state.filtered = state.filtered.slice().sort((a, b) => b.score - a.score).slice(0, 10);
+  }
 
   renderAll();
 }
@@ -293,7 +397,12 @@ function updateBrief() {
   const context = state.records.filter((r) => r.actionability === 'Context Only').length;
   const lowSignal = state.records.filter((r) => r.actionability === 'Low Signal').length;
   const watchlist = state.records.filter((r) => r.watchlist_match).length;
+  const purchases = state.records.filter(isPurchase).length;
+  const sales = state.records.filter(isSale).length;
+  const ownership = state.records.filter(isOwnership).length;
   const refreshed = state.metadata.last_refreshed || 'Sample data';
+  const top = state.records[0];
+  const topLane = top ? top.event_type : '-';
 
   els.statTotal.textContent = total;
   els.statResearchNow.textContent = researchNow;
@@ -303,8 +412,8 @@ function updateBrief() {
   els.readoutWatch.textContent = watch;
   els.readoutContext.textContent = context;
   els.readoutHidden.textContent = lowSignal;
-  els.briefTitle.textContent = `${researchNow} records marked Research Now`;
-  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records, ${watchlist} watchlist matches, and ${lowSignal} low-signal records that can stay hidden by default.`;
+  els.briefTitle.textContent = `${researchNow} high-signal record${researchNow === 1 ? '' : 's'}`;
+  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Low-signal records can stay hidden by default.`;
 
   if (els.lastSecCheck) els.lastSecCheck.textContent = formatDate(state.metadata.last_sec_check, true);
   if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
@@ -313,7 +422,7 @@ function updateBrief() {
 }
 
 function renderAll() {
-  const queue = state.filtered.slice(0, 7);
+  const queue = state.filtered.slice(0, 10);
 
   renderCards(els.evidenceQueue, queue, 'No evidence-queue records match the current filters.', true);
   renderCards(els.visibleRecordStack, state.filtered, 'No visible records match the current filters.', false);
@@ -495,7 +604,9 @@ els.refreshButton.addEventListener('click', () => loadRecords({ manual: true }))
 els.exportButton.addEventListener('click', exportCsv);
 els.searchInput.addEventListener('input', applyFilters);
 els.typeFilter.addEventListener('change', applyFilters);
+if (els.sourceFilter) els.sourceFilter.addEventListener('change', applyFilters);
 els.actionFilter.addEventListener('change', applyFilters);
+if (els.focusFilter) els.focusFilter.addEventListener('change', applyFilters);
 els.minScore.addEventListener('input', applyFilters);
 els.watchlistOnly.addEventListener('change', applyFilters);
 els.hideLowSignal.addEventListener('change', applyFilters);

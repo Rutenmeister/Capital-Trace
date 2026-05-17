@@ -1,55 +1,67 @@
-# Capital Trace v0.5 — SEC Form 4 Refresh
+# Capital Trace v0.7 — SEC Ownership Lane
 
-Capital Trace is an Edgefield Research prototype for turning public records of capital movement into a ranked evidence queue.
+Capital Trace is an Edgefield Research prototype for turning public records of capital movement into an evidence-ranked research queue.
 
-This version adds the first real-data layer:
+This version preserves the v0.6a hosted dashboard and adds the next SEC lane:
 
-- `data/watchlist.json` — companies to check
-- `scripts/refresh_sec_form4.py` — pulls recent SEC Form 4 records from EDGAR
-- `.github/workflows/refresh-capital-trace.yml` — runs the refresh every hour and updates `data/capital_trace.json`
+- **SEC Form 4** insider activity
+- **SEC Schedule 13D / 13G** ownership threshold records
 
-## First-time setup on GitHub
+The dashboard still reads `data/capital_trace.json`. GitHub Actions runs the refresh job hourly and rewrites the data file. The website never calls SEC directly from a visitor browser.
 
-1. Upload these files to your `capital-trace` repository.
-2. Go to **Settings → Actions → General**.
-3. Under **Workflow permissions**, choose **Read and write permissions**.
-4. Click **Save**.
-5. Go to **Actions → Refresh Capital Trace → Run workflow**.
-6. Wait 1-2 minutes.
-7. Open `data/capital_trace.json` and confirm it contains real records.
-8. Open your GitHub Pages site and click **Check Now**.
+## Upload note
 
-## Optional but recommended
+If your live data is already working, do **not** upload the `data/` folder when applying this update unless you intentionally want to reset the data file.
 
-Create a GitHub secret called `CAPITAL_TRACE_USER_AGENT` with a real contact email, for example:
+For the v0.7 update, upload:
 
 ```text
-CapitalTrace/0.5 your-email@example.com
+index.html
+style.css
+app.js
+README.md
+scripts/refresh_sec_form4.py
+scripts/refresh_sec_ownership.py
+scripts/refresh_capital_trace.py
+.github/workflows/refresh-capital-trace.yml
 ```
 
-GitHub path:
+If your computer hides `.github`, create or edit this file directly in GitHub:
 
 ```text
-Settings → Secrets and variables → Actions → New repository secret
+.github/workflows/refresh-capital-trace.yml
 ```
 
-The script uses SEC public EDGAR endpoints and is intentionally watchlist-based so it stays lightweight.
+## Run once after upload
 
-## Editing the watchlist
+After committing the files:
 
-Open `data/watchlist.json` and add/remove companies:
+```text
+Actions → Refresh Capital Trace → Run workflow
+```
+
+Wait for a green check, then open the live page and hard-refresh:
+
+```text
+Ctrl + Shift + R
+```
+
+## Data mode expected after v0.7 refresh
+
+After the workflow runs, `data/capital_trace.json` should show:
 
 ```json
-{ "ticker": "NVDA", "cik": "0001045810" }
+"data_mode": "sec-watchlist-multilane"
 ```
 
-Use 10-digit CIKs when possible. The script will also normalize shorter CIKs.
+and `coverage_lanes` should include:
 
-## What this version does not do yet
+```json
+["SEC Form 4", "SEC 13D/G"]
+```
 
-- It does not scan the entire SEC universe.
-- It does not retrieve Congress disclosures yet.
-- It does not retrieve 13F or 13D/G records yet.
-- It does not call SEC from the browser.
+## Important caveat
 
-The browser only reads the saved `data/capital_trace.json` file.
+SEC Schedule 13D/G records are less standardized than Form 4 records. This lane is conservative and source-linked. Any extracted issuer, filer, or ownership percentage should be verified against the original SEC filing before use.
+
+Capital Trace is research software only. It is not investment advice, a signal service, or a prediction engine.

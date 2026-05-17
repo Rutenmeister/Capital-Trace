@@ -35,7 +35,7 @@ WATCHLIST_PATH = DATA_DIR / "watchlist.json"
 OUTPUT_JSON = DATA_DIR / "capital_trace.json"
 OUTPUT_JS = DATA_DIR / "capital_trace_data.js"
 
-USER_AGENT = os.environ.get("CAPITAL_TRACE_USER_AGENT", "CapitalTrace/0.5 contact@example.com")
+USER_AGENT = os.environ.get("CAPITAL_TRACE_USER_AGENT", "CapitalTrace/0.6 contact@example.com")
 REQUEST_DELAY_SECONDS = float(os.environ.get("CAPITAL_TRACE_REQUEST_DELAY", "0.25"))
 MAX_FORM4_PER_COMPANY = int(os.environ.get("CAPITAL_TRACE_MAX_FORM4_PER_COMPANY", "12"))
 LOOKBACK_DAYS = int(os.environ.get("CAPITAL_TRACE_LOOKBACK_DAYS", "120"))
@@ -117,9 +117,14 @@ def load_watchlist() -> List[Company]:
     return companies
 
 
-def recent_filings(company: Company) -> List[Dict[str, Any]]:
+def company_submissions(company: Company) -> Dict[str, Any]:
     url = f"{SEC_DATA}/submissions/CIK{company.cik10}.json"
     payload = sec_get(url, as_json=True)
+    return payload or {}
+
+
+def recent_filings_by_forms(company: Company, accepted_forms: set[str], max_rows: int, lookback_days: int = LOOKBACK_DAYS) -> List[Dict[str, Any]]:
+    payload = company_submissions(company)
     if not payload:
         return []
 
@@ -129,11 +134,13 @@ def recent_filings(company: Company) -> List[Dict[str, Any]]:
     filing_dates = recent.get("filingDate", [])
     report_dates = recent.get("reportDate", [])
     primary_docs = recent.get("primaryDocument", [])
-    cutoff = now_utc() - timedelta(days=LOOKBACK_DAYS)
+    cutoff = now_utc() - timedelta(days=lookback_days)
 
     rows: List[Dict[str, Any]] = []
+    accepted_upper = {form.upper() for form in accepted_forms}
     for i, form in enumerate(forms):
-        if form not in {"4", "4/A"}:
+        form_value = str(form or "").upper().strip()
+        if form_value not in accepted_upper:
             continue
         filing_date = filing_dates[i] if i < len(filing_dates) else ""
         filing_dt = parse_date(filing_date)
@@ -146,9 +153,13 @@ def recent_filings(company: Company) -> List[Dict[str, Any]]:
             "report_date": report_dates[i] if i < len(report_dates) else "",
             "primary_document": primary_docs[i] if i < len(primary_docs) else "",
         })
-        if len(rows) >= MAX_FORM4_PER_COMPANY:
+        if len(rows) >= max_rows:
             break
     return rows
+
+
+def recent_filings(company: Company) -> List[Dict[str, Any]]:
+    return recent_filings_by_forms(company, {"4", "4/A"}, MAX_FORM4_PER_COMPANY)
 
 
 def filing_base_url(company: Company, accession: str) -> str:
@@ -290,16 +301,16 @@ def score_form4(role: str, code: str, value: Optional[float], owner_type: str, f
     reasons: List[str] = ["Source-linked SEC Form 4 record"]
 
     if code == "P":
-        score += 34
+        score += 36
         reasons.append("Open-market insider purchase")
     elif code == "S":
-        score += 10
-        reasons.append("Insider sale disclosed")
+        score += 0
+        reasons.append("Insider sale disclosed; treated as context unless unusually strong")
     elif code == "M":
-        score -= 8
+        score -= 12
         reasons.append("Option exercise; weaker capital signal")
     elif code in {"A", "G"}:
-        score -= 12
+        score -= 16
         reasons.append("Compensation or grant-style transaction")
     else:
         reasons.append(f"Transaction code {code or '-'} requires review")
@@ -356,9 +367,15 @@ def score_form4(role: str, code: str, value: Optional[float], owner_type: str, f
         freshness = "Stale"
         score -= 8
 
+    # Tighten attention compression: sales and admin records should rarely become urgent.
+    if code == "S":
+        score = min(score, 72 if (value or 0) >= 1_000_000 else 64)
+    elif code in {"M", "A", "G"}:
+        score = min(score, 44)
+
     score = max(0, min(100, int(round(score))))
 
-    if score >= 82 and code == "P":
+    if score >= 84 and code == "P":
         grade = "A"
     elif score >= 70:
         grade = "B"
@@ -367,11 +384,17 @@ def score_form4(role: str, code: str, value: Optional[float], owner_type: str, f
     else:
         grade = "D"
 
-    if score >= 80 and grade in {"A", "B"}:
+    if code == "P" and score >= 84 and grade in {"A", "B"}:
         action = "Research Now"
-    elif score >= 60:
+    elif code == "P" and score >= 62:
         action = "Watch"
-    elif score >= 40:
+    elif code == "S":
+        action = "Watch" if score >= 68 else "Context Only"
+    elif code in {"M", "A", "G"}:
+        action = "Context Only" if score >= 40 else "Low Signal"
+    elif score >= 78 and grade in {"A", "B"}:
+        action = "Watch"
+    elif score >= 50:
         action = "Context Only"
     else:
         action = "Low Signal"
@@ -490,7 +513,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company]) -> No
     payload = {
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.3",
+            "schema_version": "0.6",
             "data_mode": "sec-form-4-watchlist",
             "source_pipeline": "sec-edgar-form4-watchlist",
             "refresh_frequency": "hourly",
@@ -502,7 +525,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company]) -> No
             "coverage_lanes": ["Form 4 active", "13F ready", "13D/G ready", "Congress ready"],
             "watchlist_count": len(companies),
             "record_count": len(records),
-            "methodology_version": "0.3-form4-watchlist"
+            "methodology_version": "0.6-form4-attention-compression"
         },
         "records": records,
     }
@@ -512,9 +535,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company]) -> No
     print(f"[OK] wrote {OUTPUT_JSON.relative_to(ROOT)} with {len(records)} records")
 
 
-def main() -> int:
-    companies = load_watchlist()
-    print(f"[INFO] Checking {len(companies)} watchlist companies")
+def collect_form4_records(companies: List[Company]) -> List[Dict[str, Any]]:
     all_records: List[Dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -529,7 +550,13 @@ def main() -> int:
                     continue
                 seen.add(rid)
                 all_records.append(record)
+    return all_records
 
+
+def main() -> int:
+    companies = load_watchlist()
+    print(f"[INFO] Checking {len(companies)} watchlist companies")
+    all_records = collect_form4_records(companies)
     write_outputs(all_records, companies)
     return 0
 

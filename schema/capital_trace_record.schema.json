@@ -97,6 +97,33 @@
       "items": {
         "type": "string"
       }
+    },
+    "ownership_percent": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "transaction_code": {
+      "type": "string"
+    },
+    "transaction_value": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "shares": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "price": {
+      "type": [
+        "number",
+        "null"
+      ]
     }
   }
 }
