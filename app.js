@@ -1,928 +1,444 @@
-const DASHBOARD_CHECK_INTERVAL_MS = 5 * 60 * 1000;
-const EXTRACTION_ORDER = ['complete', 'partial', 'minimal', 'failed'];
+#!/usr/bin/env python3
+"""
+Capital Trace SEC 13D/G ownership refresh lane.
 
-const state = {
-  records: [],
-  filtered: [],
-  metadata: {},
-  payloadSignature: '',
-  lastDashboardCheck: null,
-};
+This script adds a second SEC source lane for Schedule 13D / 13G ownership
+records. It is intentionally conservative: records are normalized into the
+same Capital Trace schema as Form 4 records, with source links and caveats.
 
-const els = {
-  refreshButton: document.querySelector('#refreshButton'),
-  syncStatus: document.querySelector('#syncStatus'),
-  exportButton: document.querySelector('#exportButton'),
-  searchInput: document.querySelector('#searchInput'),
-  typeFilter: document.querySelector('#typeFilter'),
-  sourceFilter: document.querySelector('#sourceFilter'),
-  filingTypeFilter: document.querySelector('#filingTypeFilter'),
-  timeWindowFilter: document.querySelector('#timeWindowFilter'),
-  displayModeFilter: document.querySelector('#displayModeFilter'),
-  extractionFilter: document.querySelector('#extractionFilter'),
-  actionFilter: document.querySelector('#actionFilter'),
-  focusFilter: document.querySelector('#focusFilter'),
-  minScore: document.querySelector('#minScore'),
-  minScoreValue: document.querySelector('#minScoreValue'),
-  watchlistOnly: document.querySelector('#watchlistOnly'),
-  hideLowSignal: document.querySelector('#hideLowSignal'),
-  evidenceQueue: document.querySelector('#evidenceQueue'),
-  visibleRecordStack: document.querySelector('#visibleRecordStack'),
-  recordsTable: document.querySelector('#recordsTable'),
-  visibleCount: document.querySelector('#visibleCount'),
-  tableCount: document.querySelector('#tableCount'),
-  statTotal: document.querySelector('#statTotal'),
-  statResearchNow: document.querySelector('#statResearchNow'),
-  statWatchlist: document.querySelector('#statWatchlist'),
-  statRefresh: document.querySelector('#statRefresh'),
-  briefTitle: document.querySelector('#briefTitle'),
-  briefText: document.querySelector('#briefText'),
-  readoutResearch: document.querySelector('#readoutResearch'),
-  readoutWatch: document.querySelector('#readoutWatch'),
-  readoutContext: document.querySelector('#readoutContext'),
-  readoutHidden: document.querySelector('#readoutHidden'),
-  lastSecCheck: document.querySelector('#lastSecCheck'),
-  nextSecCheck: document.querySelector('#nextSecCheck'),
-  dataMode: document.querySelector('#dataMode'),
-  sourceCoverage: document.querySelector('#sourceCoverage'),
-  laneHealth: document.querySelector('#laneHealth'),
-  traceBrief: document.querySelector('#traceBrief'),
-  template: document.querySelector('#recordCardTemplate'),
-};
+The SEC filing ecosystem does not expose every 13D/G record by target ticker
+through one simple endpoint. This lane uses two watchlist-safe methods:
+  1. Company submissions where SC 13D / SC 13G records are present.
+  2. EDGAR browse endpoint for each watchlist CIK and ownership form type.
 
-async function loadRecords(options = {}) {
-  const { manual = false, silent = false } = options;
-  let payload = null;
-  let source = 'embedded sample';
+If a watchlist company has no recent ownership filings, the lane simply returns
+zero records instead of fabricating sample data.
+"""
 
-  if (manual) setSyncStatus('Checking latest saved records...', 'checking');
+from __future__ import annotations
 
-  // Local-first fallback: browsers often block fetch() for JSON when index.html is
-  // opened directly from the file system. The embedded JS payload makes the
-  // prototype work by double-clicking index.html, while keeping JSON support for
-  // future hosted/scheduled refresh versions.
-  if (window.CAPITAL_TRACE_PAYLOAD) {
-    payload = window.CAPITAL_TRACE_PAYLOAD;
-  }
+import html
+import json
+import re
+import time
+import urllib.parse
+import xml.etree.ElementTree as ET
+from datetime import timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
-  // When hosted over http(s), prefer the JSON file so future refresh jobs can
-  // replace data/capital_trace.json without rebuilding the page bundle.
-  if (location.protocol !== 'file:') {
-    try {
-      const url = `data/capital_trace.json?cache=${Date.now()}`;
-      const response = await fetch(url, { cache: 'no-store' });
-      if (response.ok) {
-        payload = await response.json();
-        source = 'hosted JSON';
-      }
-    } catch (error) {
-      console.warn('Using embedded data fallback because JSON fetch failed.', error);
-    }
-  }
+from refresh_sec_form4 import (
+    Company,
+    LOOKBACK_DAYS,
+    REQUEST_DELAY_SECONDS,
+    SEC_ARCHIVES,
+    SEC_DATA,
+    all_desc,
+    filing_base_url,
+    load_watchlist,
+    now_utc,
+    parse_date,
+    recent_filings_by_forms,
+    sec_get,
+)
 
-  state.lastDashboardCheck = new Date();
-
-  if (!payload) {
-    els.evidenceQueue.innerHTML = `<p class="empty-state">Capital Trace could not load records. Check that <code>data/capital_trace_data.js</code> exists.</p>`;
-    setSyncStatus('Unable to load Capital Trace records.', 'error');
-    return;
-  }
-
-  try {
-    const prepared = preparePayload(payload);
-    const normalizedRecords = prepared.records.map(normalizeCapitalTraceRecord).map(recalibrateRecord);
-    const nextSignature = payloadSignature({ metadata: prepared.metadata, records: normalizedRecords });
-    const previousSignature = state.payloadSignature;
-    const previousIds = new Set(state.records.map((record) => record.record_id || record.id));
-
-    state.metadata = normalizeMetadata(prepared.metadata, source);
-    state.records = normalizedRecords.sort((a, b) => b.score - a.score);
-    state.payloadSignature = nextSignature;
-
-    populateTypeFilter();
-    populateSourceFilter();
-    populateFilingTypeFilter();
-    applyFilters();
-    updateBrief();
-
-    if (previousSignature && previousSignature !== nextSignature) {
-      const newCount = state.records.filter((record) => !previousIds.has(record.record_id || record.id)).length;
-      setSyncStatus(newCount > 0 ? `Updated: ${newCount} new record${newCount === 1 ? '' : 's'} added to the Evidence Queue.` : 'Updated: record file changed; queue refreshed.', 'updated');
-    } else if (manual) {
-      setSyncStatus(`No new records since the last saved data check. Dashboard checked at ${formatClock(state.lastDashboardCheck)}.`, 'clean');
-    } else if (!silent) {
-      setSyncStatus(`Loaded ${source}. Dashboard auto-checks the saved record file every 5 minutes when hosted.`, 'clean');
-    }
-  } catch (error) {
-    console.error('Capital Trace record load failed:', error);
-    els.evidenceQueue.innerHTML = `<p class="empty-state">Capital Trace found the data file, but could not read its record format. ${escapeHtml(error.message || String(error))}</p>`;
-    els.visibleRecordStack.innerHTML = '';
-    setSyncStatus('Data file found, but record format could not be read. Upload the v0.5a compatibility patch.', 'error');
-  }
-}
-
-function preparePayload(payload) {
-  // Compatibility layer: accepts all Capital Trace data shapes used so far:
-  // 1) [records]
-  // 2) { metadata, records }
-  // 3) { schema_version, generated_at, records }
-  // 4) { data: { metadata, records } }
-  const raw = payload && payload.data && Array.isArray(payload.data.records) ? payload.data : payload;
-  const records = Array.isArray(raw) ? raw : Array.isArray(raw.records) ? raw.records : [];
-  if (!Array.isArray(records)) throw new Error('records is not an array');
-
-  const metadata = Array.isArray(raw) ? {} : {
-    ...(raw.metadata || {}),
-    product: raw.product || (raw.metadata && raw.metadata.product) || 'Capital Trace',
-    schema_version: raw.schema_version || (raw.metadata && raw.metadata.schema_version),
-    last_refreshed: raw.last_refreshed || raw.generated_at || (raw.metadata && raw.metadata.last_refreshed),
-    last_data_update: raw.last_data_update || raw.generated_at || (raw.metadata && raw.metadata.last_data_update),
-    last_sec_check: raw.last_sec_check || raw.generated_at || (raw.metadata && raw.metadata.last_sec_check),
-    next_scheduled_check: raw.next_scheduled_check || (raw.metadata && raw.metadata.next_scheduled_check),
-    data_mode: raw.data_mode || (raw.metadata && raw.metadata.data_mode),
-    source_pipeline: raw.source_pipeline || (raw.metadata && raw.metadata.source_pipeline),
-    refresh_frequency: raw.refresh_frequency || (raw.metadata && raw.metadata.refresh_frequency),
-    source_groups: raw.source_groups || (raw.metadata && raw.metadata.source_groups),
-    coverage_lanes: raw.coverage_lanes || (raw.metadata && raw.metadata.coverage_lanes),
-    methodology_version: raw.methodology_version || (raw.metadata && raw.metadata.methodology_version),
-    lane_diagnostics: raw.lane_diagnostics || (raw.metadata && raw.metadata.lane_diagnostics),
-    lookback_days: raw.lookback_days || (raw.metadata && raw.metadata.lookback_days),
-    supported_forms: raw.supported_forms || (raw.metadata && raw.metadata.supported_forms),
-    counts_by_lane: raw.counts_by_lane || (raw.metadata && raw.metadata.counts_by_lane),
-    counts_by_form: raw.counts_by_form || (raw.metadata && raw.metadata.counts_by_form),
-  };
-
-  return { metadata, records };
-}
-
-function normalizeMetadata(metadata, source) {
-  const lastRefreshed = metadata.last_refreshed || metadata.last_data_update || new Date().toISOString();
-  const lastSecCheck = metadata.last_sec_check || metadata.last_refreshed || null;
-  return {
-    product: metadata.product || 'Capital Trace',
-    schema_version: metadata.schema_version || '0.2',
-    data_mode: metadata.data_mode || (source === 'hosted JSON' ? 'hosted' : 'sample'),
-    source_pipeline: metadata.source_pipeline || 'sample-normalized-records',
-    refresh_frequency: metadata.refresh_frequency || 'hourly-ready',
-    last_refreshed: lastRefreshed,
-    last_data_update: metadata.last_data_update || lastRefreshed,
-    last_sec_check: lastSecCheck,
-    next_scheduled_check: metadata.next_scheduled_check || estimateNextHourlyCheck(lastSecCheck || lastRefreshed),
-    source_groups: metadata.source_groups || ['SEC Insider Ownership', 'SEC Ownership Thresholds'],
-    coverage_lanes: metadata.coverage_lanes || metadata.source_groups || ['SEC Form 4', 'SEC 13D/G Ownership', 'SEC 13F Institutional Holdings', 'SEC Form 144 Proposed Sales'],
-    methodology_version: metadata.methodology_version || '0.10',
-    lane_diagnostics: metadata.lane_diagnostics || {},
-    lookback_days: metadata.lookback_days || 60,
-    supported_forms: metadata.supported_forms || [],
-    counts_by_lane: metadata.counts_by_lane || {},
-    counts_by_form: metadata.counts_by_form || {},
-  };
-}
-
-function normalizeCapitalTraceRecord(record = {}) {
-  const rawSourceForm = record.source_form || record.filing_type || record.form_type || record.form || record.source_type || record.source || '-';
-  const sourceType = record.source_type || rawSourceForm || '-';
-  const filingType = normalizeFilingType(rawSourceForm || sourceType);
-  const recordId = record.record_id || record.id || record.accession_number || [sourceType, filingType, record.ticker, record.filer, record.filed_date, record.event_type].join('|');
-  const eventDate = record.event_date || record.transaction_date || record.period_end || record.filed_date || '';
-
-  return {
-    id: record.id || recordId,
-    record_id: recordId,
-    ticker: record.ticker || '-',
-    company: record.company || '-',
-    source_group: record.source_group || inferSourceGroup(sourceType),
-    source_type: sourceType,
-    source_form: rawSourceForm || sourceType,
-    filing_type: filingType,
-    record_type: record.record_type || 'Capital Record',
-    event_type: record.event_type || 'Public Record Event',
-    entity_type: record.entity_type || inferEntityType(record),
-    filer: record.filer || record.insider_name || record.institution || '-',
-    role: record.role || record.insider_title || record.filer_role || '-',
-    owner_type: record.owner_type || record.ownership_type || '-',
-    filed_date: record.filed_date || record.filing_date || '',
-    event_date: eventDate,
-    transaction_date: record.transaction_date || eventDate,
-    period_end: record.period_end || '',
-    accession_number: record.accession_number || '',
-    score: Number(record.score || 0),
-    evidence_grade: record.evidence_grade || 'C',
-    freshness: record.freshness || 'Unclassified',
-    actionability: record.actionability || 'Context Only',
-    watchlist_match: Boolean(record.watchlist_match),
-    rank_reasons: Array.isArray(record.rank_reasons) ? record.rank_reasons : [],
-    does_not_prove: Array.isArray(record.does_not_prove) ? record.does_not_prove : [],
-    caveat: record.caveat || 'Source record requires additional review before use.',
-    source_url: record.source_url || '#',
-    transaction_code: record.transaction_code || '',
-    transaction_value: Number(record.transaction_value || 0),
-    shares: Number(record.shares || 0),
-    price: Number(record.price || 0)
-  };
-}
+OWNERSHIP_FORMS = {"SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"}
+MAX_OWNERSHIP_PER_COMPANY = 20
 
 
-function normalizeFilingType(value = '') {
-  const raw = String(value || '').trim();
-  if (!raw || raw === '-') return 'Unknown';
-  const upper = raw.toUpperCase()
-    .replace(/^SEC\s+/, '')
-    .replace(/^SCHEDULE\s+/, 'SC ')
-    .replace(/^FORM\s+/, 'FORM ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (upper === '4' || upper === 'FORM 4') return 'Form 4';
-  if (upper === '4/A' || upper === 'FORM 4/A') return 'Form 4/A';
-  if (upper.includes('13D/A')) return 'SC 13D/A';
-  if (upper.includes('13G/A')) return 'SC 13G/A';
-  if (upper.includes('13D')) return 'SC 13D';
-  if (upper.includes('13G')) return 'SC 13G';
-  if (upper.includes('13F-HR/A')) return '13F-HR/A';
-  if (upper.includes('13F-HR')) return '13F-HR';
-  if (upper === '144' || upper === 'FORM 144') return 'Form 144';
-  if (upper === '144/A' || upper === 'FORM 144/A') return 'Form 144/A';
-  return raw.replace(/^SEC\s+/i, '').replace(/^Schedule\s+/i, 'SC ');
-}
-
-function countBy(records, getter) {
-  const counts = new Map();
-  for (const record of records) {
-    const value = getter(record) || 'Unknown';
-    counts.set(value, (counts.get(value) || 0) + 1);
-  }
-  return counts;
-}
-
-function optionLabelWithCount(label, count) {
-  return `${label} (${count})`;
-}
-
-function roleShort(role = '') {
-  const r = String(role).toLowerCase();
-  if (r.includes('chief executive') || r.includes('ceo') || r.includes('president')) return 'CEO';
-  if (r.includes('chief financial') || r.includes('cfo')) return 'CFO';
-  if (r.includes('director')) return 'Director';
-  if (r.includes('10%')) return '10% Owner';
-  return 'Insider';
-}
-
-function isPurchase(record) {
-  return String(record.transaction_code || '').toUpperCase() === 'P' || String(record.event_type || '').toLowerCase().includes('purchase');
-}
-
-function isSale(record) {
-  return String(record.transaction_code || '').toUpperCase() === 'S' || String(record.event_type || '').toLowerCase().includes('sale');
-}
-
-function isOwnership(record) {
-  const group = String(record.source_group || '').toLowerCase();
-  const type = String(record.record_type || '').toLowerCase();
-  const source = String(record.source_type || '').toLowerCase();
-  return group.includes('ownership threshold') || type.includes('ownership threshold') || source.includes('13d') || source.includes('13g');
-}
+def strip_tags(text: str) -> str:
+    text = re.sub(r"<script[\s\S]*?</script>", " ", text, flags=re.I)
+    text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"[ \t\r\f\v]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n", text)
+    return text.strip()
 
 
-function isInstitutional(record) {
-  const group = String(record.source_group || '').toLowerCase();
-  const type = String(record.record_type || '').toLowerCase();
-  const source = String(record.source_type || '').toLowerCase();
-  const form = String(record.filing_type || record.source_form || '').toLowerCase();
-  return group.includes('institutional') || type.includes('institutional') || source.includes('13f') || form.includes('13f');
-}
+def compact_text(text: str) -> str:
+    return re.sub(r"\s+", " ", strip_tags(text)).strip()
 
-function isProposedSale(record) {
-  const group = String(record.source_group || '').toLowerCase();
-  const type = String(record.record_type || '').toLowerCase();
-  const source = String(record.source_type || '').toLowerCase();
-  const form = String(record.filing_type || record.source_form || '').toLowerCase();
-  return group.includes('proposed sales') || type.includes('proposed sale') || source.includes('144') || form.includes('144');
-}
 
-function isAdministrative(record) {
-  const code = String(record.transaction_code || '').toUpperCase();
-  const event = String(record.event_type || '').toLowerCase();
-  return ['M','A','G'].includes(code) || event.includes('option') || event.includes('award') || event.includes('grant');
-}
+def ownership_source_url(company: Company, filing: Dict[str, Any]) -> str:
+    base = filing_base_url(company, filing.get("accession", ""))
+    primary = filing.get("primary_document") or ""
+    return f"{base}/{primary}" if primary else base
 
-function recalibrateRecord(record) {
-  const next = { ...record };
-  const originalScore = Number(next.score || 0);
-  let adjustedScore = originalScore;
-  const role = roleShort(next.role);
 
-  if (isProposedSale(next)) {
-    // Form 144 is a proposed-sale notice, not a confirmed sale. Keep actionability restrained.
-    adjustedScore = Math.min(originalScore, next.transaction_value >= 10000000 ? 78 : 68);
-  } else if (isInstitutional(next)) {
-    // 13F records are delayed institutional context; do not run insider transaction logic.
-    adjustedScore = originalScore;
-  } else if (isOwnership(next)) {
-    // Do not force ownership records into insider purchase/sale logic.
-    adjustedScore = originalScore;
-  } else if (isPurchase(next)) {
-    if (!/purchase/i.test(next.event_type)) next.event_type = `${role} Open-Market Purchase`;
-    else if (!/^(CEO|CFO|Director|10% Owner)/.test(next.event_type)) next.event_type = `${role} ${next.event_type}`;
-    adjustedScore = Math.min(100, originalScore + (role === 'CEO' || role === 'CFO' ? 4 : 0));
-  } else if (isSale(next)) {
-    next.event_type = role === 'Insider' ? 'Insider Sale' : `${role} Sale`;
-    adjustedScore = Math.min(originalScore, next.transaction_value >= 1000000 ? 72 : 64);
-  } else if (isAdministrative(next)) {
-    adjustedScore = Math.min(originalScore, 44);
-  }
+def get_ownership_document(company: Company, filing: Dict[str, Any]) -> Tuple[str, str]:
+    """Return filing text and source URL for a 13D/G record."""
+    source_url = ownership_source_url(company, filing)
+    text = sec_get(source_url, as_json=False)
+    if text:
+        return text, source_url
 
-  next.score = Math.max(0, Math.min(100, Math.round(adjustedScore)));
+    # Fallback to index lookup if primary document did not resolve.
+    base = filing_base_url(company, filing.get("accession", ""))
+    index = sec_get(f"{base}/index.json", as_json=True)
+    if index:
+        for item in index.get("directory", {}).get("item", []):
+            name = item.get("name", "")
+            if name.lower().endswith((".htm", ".html", ".txt")):
+                url = f"{base}/{name}"
+                text = sec_get(url, as_json=False)
+                if text:
+                    return text, url
+    return "", source_url
 
-  if (isProposedSale(next) && next.score >= 72) {
-    next.actionability = 'Watch';
-  } else if (isProposedSale(next) && next.score >= 45) {
-    next.actionability = 'Context Only';
-  } else if (isProposedSale(next)) {
-    next.actionability = 'Low Signal';
-  } else if (isInstitutional(next) && next.score >= 72) {
-    next.actionability = 'Watch';
-  } else if (isInstitutional(next) && next.score >= 45) {
-    next.actionability = 'Context Only';
-  } else if (isInstitutional(next)) {
-    next.actionability = 'Low Signal';
-  } else if (isOwnership(next) && next.score >= 84 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
-    next.actionability = 'Research Now';
-  } else if (isOwnership(next) && next.score >= 62) {
-    next.actionability = 'Watch';
-  } else if (isPurchase(next) && next.score >= 84 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
-    next.actionability = 'Research Now';
-  } else if (isPurchase(next) && next.score >= 62) {
-    next.actionability = 'Watch';
-  } else if (isSale(next)) {
-    next.actionability = next.score >= 68 ? 'Watch' : 'Context Only';
-  } else if (isAdministrative(next)) {
-    next.actionability = next.score >= 40 ? 'Context Only' : 'Low Signal';
-  } else if (next.score >= 78 && ['A','B'].includes(String(next.evidence_grade).charAt(0).toUpperCase())) {
-    next.actionability = 'Watch';
-  } else if (next.score >= 50) {
-    next.actionability = 'Context Only';
-  } else {
-    next.actionability = 'Low Signal';
-  }
 
-  if (isSale(next) && !next.rank_reasons.some(r => /sale/i.test(r))) {
-    next.rank_reasons.unshift('Sale disclosed; treated as context unless unusually strong');
-  }
-  if (isAdministrative(next) && !next.rank_reasons.some(r => /administrative|compensation|option/i.test(r))) {
-    next.rank_reasons.unshift('Administrative or compensation-related filing; lower signal value');
-  }
-  return next;
-}
+def parse_atom_entries(text: str) -> List[Dict[str, str]]:
+    """Parse EDGAR browse-edgar Atom entries without external dependencies."""
+    if not text:
+        return []
+    try:
+        root = ET.fromstring(text.encode("utf-8"))
+    except ET.ParseError:
+        return []
 
-function inferSourceGroup(sourceType = '') {
-  const s = String(sourceType).toLowerCase();
-  if (s.includes('form 4')) return 'SEC Insider Ownership';
-  if (s.includes('13f')) return 'SEC Institutional Holdings';
-  if (s.includes('144') || s.includes('proposed sale')) return 'SEC Proposed Sales';
-  if (s.includes('13d') || s.includes('13g')) return 'SEC Ownership Threshold';
-  if (s.includes('congress') || s.includes('house') || s.includes('senate')) return 'Public Official Disclosure';
-  return 'Public Capital Record';
-}
+    def lname(tag: str) -> str:
+        return tag.split("}", 1)[-1] if "}" in tag else tag
 
-function inferEntityType(record = {}) {
-  const sourceType = String(record.source_type || record.source_form || '').toLowerCase();
-  if (sourceType.includes('form 4')) return 'insider';
-  if (sourceType.includes('13f')) return 'institution';
-  if (sourceType.includes('144') || sourceType.includes('proposed sale')) return 'proposed seller';
-  if (sourceType.includes('13d') || sourceType.includes('13g')) return 'beneficial owner';
-  return 'public record entity';
-}
+    entries = []
+    for entry in root.iter():
+        if lname(entry.tag) != "entry":
+            continue
+        item: Dict[str, str] = {}
+        for child in list(entry):
+            name = lname(child.tag)
+            if name == "title":
+                item["title"] = (child.text or "").strip()
+            elif name == "updated":
+                item["updated"] = (child.text or "").strip()
+            elif name == "link":
+                item["link"] = child.attrib.get("href", "")
+            elif name == "accession-number":
+                item["accession"] = (child.text or "").strip()
+            elif name == "filing-date":
+                item["filing_date"] = (child.text or "").strip()
+            elif name == "filing-type":
+                item["form"] = (child.text or "").strip()
+        if item:
+            entries.append(item)
+    return entries
 
-function payloadSignature(payload) {
-  const ids = (payload.records || [])
-    .map((record) => `${record.record_id || record.id}|${record.score}|${record.actionability}|${record.filed_date}`)
-    .sort()
-    .join('~');
-  return `${payload.metadata.last_refreshed || payload.metadata.last_data_update || ''}::${ids}`;
-}
 
-function setSyncStatus(message, mode = 'clean') {
-  if (!els.syncStatus) return;
-  els.syncStatus.textContent = message;
-  els.syncStatus.className = `sync-status sync-${mode}`;
-}
+def browse_ownership_filings(company: Company) -> List[Dict[str, Any]]:
+    """Best-effort watchlist ownership search through SEC browse endpoint."""
+    rows: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    cutoff = now_utc() - timedelta(days=LOOKBACK_DAYS)
 
-function estimateNextHourlyCheck(value) {
-  const date = new Date(value || Date.now());
-  if (Number.isNaN(date.getTime())) return '';
-  date.setHours(date.getHours() + 1, 0, 0, 0);
-  return date.toISOString();
-}
+    for form in ("SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"):
+        query = urllib.parse.urlencode({
+            "action": "getcompany",
+            "CIK": company.cik10,
+            "type": form,
+            "owner": "include",
+            "count": "40",
+            "output": "atom",
+        })
+        feed = sec_get(f"https://www.sec.gov/cgi-bin/browse-edgar?{query}", as_json=False)
+        for entry in parse_atom_entries(feed or ""):
+            accession = entry.get("accession") or ""
+            if not accession:
+                # Pull accession from the details URL if Atom did not include it.
+                m = re.search(r"accession_number=([0-9-]+)", entry.get("link", ""))
+                accession = m.group(1) if m else ""
+            if not accession or accession in seen:
+                continue
+            filing_date = entry.get("filing_date") or entry.get("updated", "")[:10]
+            filing_dt = parse_date(filing_date)
+            if filing_dt and filing_dt < cutoff:
+                continue
+            rows.append({
+                "form": entry.get("form") or form,
+                "accession": accession,
+                "filing_date": filing_date,
+                "report_date": filing_date,
+                "primary_document": "",
+                "browse_link": entry.get("link", ""),
+            })
+            seen.add(accession)
+            if len(rows) >= MAX_OWNERSHIP_PER_COMPANY:
+                return rows
+    return rows
 
-function formatClock(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date);
-}
 
-function populateTypeFilter() {
-  const current = els.typeFilter.value;
-  const counts = countBy(state.records, (record) => record.record_type);
-  const types = [...counts.keys()].sort();
-  els.typeFilter.innerHTML = '<option value="all">All record types</option>';
-  for (const type of types) {
-    const option = document.createElement('option');
-    option.value = type;
-    option.textContent = optionLabelWithCount(type, counts.get(type));
-    els.typeFilter.appendChild(option);
-  }
-  els.typeFilter.value = types.includes(current) ? current : 'all';
-}
+def recent_ownership_filings(company: Company) -> List[Dict[str, Any]]:
+    rows = recent_filings_by_forms(company, OWNERSHIP_FORMS, MAX_OWNERSHIP_PER_COMPANY)
+    # Add browse results because Schedule 13D/G may not appear in a target company's
+    # recent submissions in every case.
+    seen = {r.get("accession") for r in rows}
+    for row in browse_ownership_filings(company):
+        if row.get("accession") not in seen:
+            rows.append(row)
+            seen.add(row.get("accession"))
+        if len(rows) >= MAX_OWNERSHIP_PER_COMPANY:
+            break
+    return rows
 
-function populateSourceFilter() {
-  if (!els.sourceFilter) return;
-  const current = els.sourceFilter.value;
-  const counts = countBy(state.records, (record) => record.source_group || record.source_type || 'Unknown');
-  const groups = [...counts.keys()].sort();
-  els.sourceFilter.innerHTML = '<option value="all">All source lanes</option>';
-  for (const group of groups) {
-    const option = document.createElement('option');
-    option.value = group;
-    option.textContent = optionLabelWithCount(group, counts.get(group));
-    els.sourceFilter.appendChild(option);
-  }
-  els.sourceFilter.value = groups.includes(current) ? current : 'all';
-}
 
-function populateFilingTypeFilter() {
-  if (!els.filingTypeFilter) return;
-  const current = els.filingTypeFilter.value;
-  const counts = countBy(state.records, (record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type));
-  const supported = Array.isArray(state.metadata.supported_forms)
-    ? state.metadata.supported_forms.map(normalizeFilingType)
-    : [];
-  const allTypes = new Set([...supported, ...counts.keys()]);
-  const filingTypes = [...allTypes].filter(Boolean).sort((a, b) => {
-    const order = ['Form 4', 'Form 4/A', 'SC 13D', 'SC 13D/A', 'SC 13G', 'SC 13G/A', '13F-HR', '13F-HR/A', 'Form 144', 'Form 144/A', 'Unknown'];
-    const ai = order.indexOf(a);
-    const bi = order.indexOf(b);
-    if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-    return a.localeCompare(b);
-  });
-  els.filingTypeFilter.innerHTML = '<option value="all">All filing types</option>';
-  for (const filingType of filingTypes) {
-    const option = document.createElement('option');
-    option.value = filingType;
-    option.textContent = optionLabelWithCount(filingType, counts.get(filingType) || 0);
-    els.filingTypeFilter.appendChild(option);
-  }
-  els.filingTypeFilter.value = filingTypes.includes(current) ? current : 'all';
-}
+def regex_first(patterns: List[str], text: str) -> str:
+    for pattern in patterns:
+        m = re.search(pattern, text, flags=re.I)
+        if m:
+            value = html.unescape(m.group(1)).strip(" :-\t\r\n")
+            value = re.sub(r"\s+", " ", value)
+            if value:
+                return value[:160]
+    return ""
 
-function recordWithinWindow(record, selectedTimeWindow) {
-  if (!selectedTimeWindow || selectedTimeWindow === 'all') return true;
-  const days = Number(selectedTimeWindow);
-  if (!Number.isFinite(days) || days <= 0) return true;
-  const rawDate = record.filed_date || record.event_date || record.transaction_date || record.period_end;
-  const date = new Date(rawDate);
-  if (Number.isNaN(date.getTime())) return true;
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  return date.getTime() >= cutoff;
-}
 
-function selectedHighlightFilingType() {
-  const selectedFilingType = els.filingTypeFilter ? els.filingTypeFilter.value : 'all';
-  const displayMode = els.displayModeFilter ? els.displayModeFilter.value : 'filter';
-  return displayMode === 'highlight' && selectedFilingType !== 'all' ? selectedFilingType : null;
-}
+def infer_issuer_name(text: str, fallback: str) -> str:
+    plain = compact_text(text)
+    return regex_first([
+        r"Name of Issuer\s*[:\-]?\s*([^\n|]{2,120})",
+        r"Issuer\s*[:\-]?\s*([^\n|]{2,120})",
+        r"Item\s*1\.\s*Security and Issuer\s*([^\n]{2,120})",
+    ], plain) or fallback
 
-function recordMatchesHighlight(record) {
-  const selected = selectedHighlightFilingType();
-  if (!selected) return false;
-  return (record.filing_type || normalizeFilingType(record.source_form || record.source_type)) === selected;
-}
 
-function applyFilters() {
-  const query = els.searchInput.value.trim().toLowerCase();
-  const selectedType = els.typeFilter.value;
-  const selectedSource = els.sourceFilter ? els.sourceFilter.value : 'all';
-  const selectedFilingType = els.filingTypeFilter ? els.filingTypeFilter.value : 'all';
-  const selectedTimeWindow = els.timeWindowFilter ? els.timeWindowFilter.value : 'all';
-  const displayMode = els.displayModeFilter ? els.displayModeFilter.value : 'filter';
-  const selectedExtraction = els.extractionFilter ? els.extractionFilter.value : 'all';
-  const selectedAction = els.actionFilter.value;
-  const selectedFocus = els.focusFilter ? els.focusFilter.value : 'all';
-  const minimumScore = Number(els.minScore.value || 0);
-  const watchlistOnly = els.watchlistOnly.checked;
-  const hideLowSignal = els.hideLowSignal.checked;
-  els.minScoreValue.textContent = `${minimumScore}+`;
+def infer_owner_name(text: str) -> str:
+    plain = compact_text(text)
+    return regex_first([
+        r"Name of Reporting Person\s*[:\-]?\s*([^\n|]{2,120})",
+        r"Reporting Person\s*[:\-]?\s*([^\n|]{2,120})",
+        r"Filed by\s*[:\-]?\s*([^\n|]{2,120})",
+    ], plain) or "Beneficial owner / reporting person"
 
-  state.filtered = state.records.filter((record) => {
-    const haystack = [
-      record.ticker,
-      record.company,
-      record.filer,
-      record.event_type,
-      record.record_type,
-      record.source_form,
-      record.source_type,
-      record.source_group,
-      record.entity_type,
-      record.actionability,
-      record.evidence_grade,
-      record.freshness,
-    ].join(' ').toLowerCase();
 
-    if (query && !haystack.includes(query)) return false;
-    if (selectedType !== 'all' && record.record_type !== selectedType) return false;
-    if (selectedSource !== 'all' && (record.source_group || record.source_type) !== selectedSource) return false;
-    if (selectedFilingType !== 'all' && displayMode === 'filter' && (record.filing_type || normalizeFilingType(record.source_form || record.source_type)) !== selectedFilingType) return false;
-    if (!recordWithinWindow(record, selectedTimeWindow)) return false;
-    if (selectedExtraction !== 'all' && String((record.extraction_quality || {}).status || '').toLowerCase() !== selectedExtraction) return false;
-    if (selectedAction !== 'all' && record.actionability !== selectedAction) return false;
-    if (Number(record.score || 0) < minimumScore) return false;
-    if (watchlistOnly && !record.watchlist_match) return false;
-    if (hideLowSignal && record.actionability === 'Low Signal') return false;
-    if (selectedFocus === 'purchases' && !isPurchase(record)) return false;
-    if (selectedFocus === 'ownership' && !isOwnership(record)) return false;
-    if (selectedFocus === 'institutional' && !isInstitutional(record)) return false;
-    if (selectedFocus === 'proposed_sales' && !isProposedSale(record)) return false;
-    return true;
-  });
+def infer_percent_owned(text: str) -> Optional[float]:
+    plain = compact_text(text)
+    patterns = [
+        r"Percent of Class Represented by Amount in Row \(11\)\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?)%",
+        r"percent of class\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?)%",
+        r"([0-9]+(?:\.[0-9]+)?)%\s+of the outstanding",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, plain, flags=re.I)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                return None
+    return None
 
-  if (selectedFocus === 'top10') {
-    state.filtered = state.filtered.slice().sort((a, b) => b.score - a.score).slice(0, 10);
-  }
 
-  renderAll();
-}
 
-function updateBrief() {
-  const total = state.records.length;
-  const researchNow = state.records.filter((r) => r.actionability === 'Research Now').length;
-  const watch = state.records.filter((r) => r.actionability === 'Watch').length;
-  const context = state.records.filter((r) => r.actionability === 'Context Only').length;
-  const lowSignal = state.records.filter((r) => r.actionability === 'Low Signal').length;
-  const watchlist = state.records.filter((r) => r.watchlist_match).length;
-  const purchases = state.records.filter(isPurchase).length;
-  const sales = state.records.filter(isSale).length;
-  const ownership = state.records.filter(isOwnership).length;
-  const institutional = state.records.filter(isInstitutional).length;
-  const proposedSales = state.records.filter(isProposedSale).length;
-  const filingTypeCount = new Set(state.records.map((record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type))).size;
-  const extractionCounts = Object.fromEntries(countBy(state.records, (record) => String((record.extraction_quality || {}).status || 'minimal')).entries());
-  const refreshed = state.metadata.last_refreshed || 'Sample data';
-  const top = state.records[0];
-  const topLane = top ? top.event_type : '-';
+def infer_beneficial_shares(text: str) -> Optional[float]:
+    plain = compact_text(text)
+    patterns = [
+        r"Aggregate Amount Beneficially Owned by Each Reporting Person\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
+        r"amount beneficially owned.*?([0-9,]+(?:\.[0-9]+)?)\s+(?:shares|share)",
+        r"beneficially owned\s+([0-9,]+(?:\.[0-9]+)?)\s+(?:shares|share)",
+        r"sole voting power\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, plain, flags=re.I)
+        if m:
+            try:
+                return float(m.group(1).replace(',', ''))
+            except ValueError:
+                return None
+    return None
 
-  els.statTotal.textContent = total;
-  els.statResearchNow.textContent = researchNow;
-  els.statWatchlist.textContent = watchlist;
-  els.statRefresh.textContent = formatDate(refreshed, true);
-  els.readoutResearch.textContent = researchNow;
-  els.readoutWatch.textContent = watch;
-  els.readoutContext.textContent = context;
-  els.readoutHidden.textContent = lowSignal;
-  els.briefTitle.textContent = `${researchNow} high-signal record${researchNow === 1 ? '' : 's'}`;
-  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${institutional} institutional records, ${proposedSales} proposed-sale notices, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Extraction: ${Object.entries(extractionCounts).map(([k, v]) => `${k} ${v}`).join(', ')}. Low-signal records can stay hidden by default.`;
+def score_ownership(form: str, filed_date: str, percent_owned: Optional[float], matched_watchlist: bool) -> Tuple[int, str, str, str, List[str], str]:
+    form_u = form.upper()
+    is_13d = "13D" in form_u
+    is_amendment = form_u.endswith("/A") or "/A" in form_u
+    score = 58
+    reasons = ["Source-linked SEC Schedule 13D/G ownership record"]
 
-  if (els.lastSecCheck) els.lastSecCheck.textContent = formatDate(state.metadata.last_sec_check, true);
-  if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
-  if (els.dataMode) els.dataMode.textContent = state.metadata.data_mode || '-';
-  if (els.sourceCoverage) {
-    const laneTotal = Math.max((state.metadata.coverage_lanes || []).length, EXPECTED_LANES.length);
-    els.sourceCoverage.textContent = `${laneTotal} lanes / ${filingTypeCount} loaded forms`;
-  }
-  renderLaneHealth();
-  renderTraceBrief();
-}
+    if is_13d:
+        score += 18
+        reasons.append("Schedule 13D can indicate active or potentially influential beneficial ownership")
+    else:
+        score += 10
+        reasons.append("Schedule 13G reports beneficial ownership, often passive or exempt")
 
-function laneStatusLabel(status) {
-  return {
-    ok: 'Live',
-    checked_no_records: 'Checked, no records',
-    partial: 'Partial',
-    failed: 'Failed',
-    disabled: 'Disabled',
-    stale: 'Stale',
-    running: 'Running',
-    not_reported: 'Not reported',
-  }[status] || String(status || 'Unknown');
-}
+    if is_amendment:
+        score -= 8
+        reasons.append("Amendment filing; review source to confirm whether ownership or intent changed")
+    else:
+        score += 8
+        reasons.append("New ownership schedule filing rather than amendment")
 
-function deriveLaneDiagnostics() {
-  const diagnostics = state.metadata.lane_diagnostics || {};
-  return EXPECTED_LANES.map((lane) => {
-    const existing = diagnostics[lane.key] || diagnostics[lane.lane] || null;
-    const recordCount = state.records.filter(lane.match).length;
-    if (existing) {
-      return {
-        ...existing,
-        key: lane.key,
-        label: lane.label,
-        forms_checked: existing.forms_checked || lane.forms,
-        records_added: Number(existing.records_added ?? recordCount),
-      };
-    }
+    if percent_owned is not None:
+        if percent_owned >= 10:
+            score += 12
+            reasons.append(f"Reported ownership percentage appears large: {percent_owned:.1f}%")
+        elif percent_owned >= 5:
+            score += 7
+            reasons.append(f"Reported ownership appears above 5% threshold: {percent_owned:.1f}%")
+    else:
+        score -= 4
+        reasons.append("Ownership percentage not extracted automatically; source review required")
+
+    # Beneficial share amount is not always easy to extract from HTML, but include it when available.
+    # The universal extraction layer will label the field as missing rather than guessing if absent.
+
+    filed_dt = parse_date(filed_date)
+    age_days = (now_utc() - filed_dt).days if filed_dt else 999
+    if age_days <= 7:
+        score += 8
+        freshness = "Recent"
+        reasons.append("Filed within the last week")
+    elif age_days <= 30:
+        score += 3
+        freshness = "Fresh"
+    else:
+        freshness = "Stale"
+        score -= 8
+
+    if matched_watchlist:
+        score += 6
+        reasons.append("Matched to Capital Trace watchlist")
+
+    score = max(0, min(100, int(round(score))))
+    grade = "A" if score >= 84 else "B" if score >= 68 else "C" if score >= 50 else "D"
+    if score >= 84 and is_13d and not is_amendment:
+        action = "Research Now"
+    elif score >= 62:
+        action = "Watch"
+    elif score >= 45:
+        action = "Context Only"
+    else:
+        action = "Low Signal"
+
+    caveat = "Schedule 13D/G records show reported beneficial ownership. Read the source filing to verify ownership percentage, reporting person, and intent."
+    return score, grade, freshness, action, reasons, caveat
+
+
+def parse_ownership_record(company: Company, filing: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    text, source_url = get_ownership_document(company, filing)
+    if not text:
+        return None
+
+    form = filing.get("form") or "SC 13D/G"
+    issuer = infer_issuer_name(text, company.ticker)
+    owner = infer_owner_name(text)
+    percent_owned = infer_percent_owned(text)
+    beneficial_shares = infer_beneficial_shares(text)
+    filed_date = filing.get("filing_date") or filing.get("report_date") or ""
+    score, grade, freshness, action, reasons, caveat = score_ownership(
+        form=form,
+        filed_date=filed_date,
+        percent_owned=percent_owned,
+        matched_watchlist=True,
+    )
+
+    is_13d = "13D" in form.upper()
+    is_amendment = "/A" in form.upper()
+    event_type = ("13D" if is_13d else "13G") + (" Ownership Amendment" if is_amendment else " Ownership Filing")
+    if is_13d and not is_amendment:
+        event_type = "New 13D Ownership Filing"
+    elif not is_13d and not is_amendment:
+        event_type = "New 13G Ownership Filing"
+
+    accession = filing.get("accession") or ""
+    record_id = f"sec-ownership:{accession}:{company.ticker}:{form}"
     return {
-      key: lane.key,
-      label: lane.label,
-      lane: lane.lane,
-      status: 'not_reported',
-      forms_checked: lane.forms,
-      companies_checked: 0,
-      lookback_days: state.metadata.lookback_days || 60,
-      records_added: recordCount,
-      errors: [],
-      note: recordCount > 0
-        ? 'Records exist for this lane, but this data file did not include lane diagnostics. Re-run the v0.10+ workflow to write diagnostics.'
-        : 'This supported lane is visible for transparency, but the current data file did not report diagnostics or records for it.',
-    };
-  });
-}
+        "id": record_id,
+        "record_id": record_id,
+        "ticker": company.ticker,
+        "company": issuer or company.ticker,
+        "source_group": "SEC Ownership Thresholds",
+        "source_type": f"SEC {form}",
+        "source_form": form,
+        "record_type": "Ownership Threshold Event",
+        "event_type": event_type,
+        "entity_type": "beneficial owner",
+        "filer": owner,
+        "role": "Beneficial owner / reporting person",
+        "owner_type": "Beneficial ownership",
+        "filed_date": filed_date,
+        "event_date": filing.get("report_date") or filed_date,
+        "transaction_date": "",
+        "period_end": filing.get("report_date") or "",
+        "accession_number": accession,
+        "transaction_code": "",
+        "shares": beneficial_shares,
+        "price": None,
+        "transaction_value": None,
+        "ownership_percent": percent_owned,
+        "score": score,
+        "evidence_grade": grade,
+        "freshness": freshness,
+        "actionability": action,
+        "watchlist_match": True,
+        "rank_reasons": reasons,
+        "does_not_prove": [
+            "Future price movement",
+            "Activist intent unless stated in the filing",
+            "Complete position history",
+            "Current ownership after later undisclosed changes",
+        ],
+        "caveat": caveat,
+        "source_url": source_url,
+    }
 
-function renderLaneHealth() {
-  if (!els.laneHealth) return;
-  const lanes = deriveLaneDiagnostics();
-  els.laneHealth.innerHTML = lanes.map((diag) => {
-    const status = diag.status || 'unknown';
-    const forms = Array.isArray(diag.forms_checked) ? diag.forms_checked.join(', ') : '-';
-    const errors = Array.isArray(diag.errors) ? diag.errors.length : 0;
-    const count = Number(diag.records_added || 0);
-    const note = diag.note || (count === 0 ? 'No records from this lane are present in the current loaded data.' : 'Lane has records in the current loaded data.');
-    return `<div class="lane-health-row lane-status-${escapeHtml(status)} ${count ? 'lane-has-records' : 'lane-zero-records'}">
-      <div><strong>${escapeHtml(diag.label || diag.key.replaceAll('_', ' '))}</strong><small>${escapeHtml(forms)}</small></div>
-      <div><span>${escapeHtml(laneStatusLabel(status))}</span><small>${count} records · ${Number(diag.companies_checked || 0)} companies · ${Number(diag.lookback_days || state.metadata.lookback_days || 0)}d</small></div>
-      ${errors ? `<p class="lane-error">${errors} error${errors === 1 ? '' : 's'} logged. Review workflow output.</p>` : ''}
-      ${note ? `<p class="lane-note">${escapeHtml(note)}</p>` : ''}
-    </div>`;
-  }).join('');
-}
+
+def collect_ownership_records(companies: List[Company], diagnostics: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    all_records: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+
+    if diagnostics is not None:
+        diagnostics["status"] = "running"
+        diagnostics["companies_checked"] = 0
+        diagnostics["forms_checked"] = sorted(OWNERSHIP_FORMS)
+        diagnostics["lookback_days"] = LOOKBACK_DAYS
+        diagnostics["filings_seen"] = 0
+        diagnostics["filings_matched"] = 0
+        diagnostics.setdefault("errors", [])
+
+    for company in companies:
+        print(f"[INFO] {company.ticker} ownership lane")
+        if diagnostics is not None:
+            diagnostics["companies_checked"] += 1
+        try:
+            filings = recent_ownership_filings(company)
+        except Exception as exc:
+            if diagnostics is not None:
+                diagnostics["errors"].append(f"{company.ticker}: 13D/G lookup failed: {type(exc).__name__}: {exc}")
+            continue
+        print(f"[INFO]   recent 13D/G filings: {len(filings)}")
+        if diagnostics is not None:
+            diagnostics["filings_seen"] += len(filings)
+            diagnostics["filings_matched"] += len(filings)
+        for filing in filings:
+            try:
+                record = parse_ownership_record(company, filing)
+            except Exception as exc:
+                if diagnostics is not None:
+                    diagnostics["errors"].append(f"{company.ticker} {filing.get('accession')}: 13D/G parse failed: {type(exc).__name__}: {exc}")
+                continue
+            if not record:
+                continue
+            rid = record.get("record_id")
+            if rid in seen:
+                continue
+            seen.add(rid)
+            form = str(record.get("source_form") or filing.get("form") or "").upper().strip()
+            if "13D/A" in form:
+                record["filing_type"] = "SC 13D/A"
+            elif "13G/A" in form:
+                record["filing_type"] = "SC 13G/A"
+            elif "13D" in form:
+                record["filing_type"] = "SC 13D"
+            elif "13G" in form:
+                record["filing_type"] = "SC 13G"
+            all_records.append(record)
+    if diagnostics is not None:
+        diagnostics["records_added"] = len(all_records)
+    return all_records
 
 
-function renderTraceBrief() {
-  if (!els.traceBrief) return;
-  const countsByForm = state.metadata.counts_by_form && Object.keys(state.metadata.counts_by_form).length
-    ? state.metadata.counts_by_form
-    : Object.fromEntries(countBy(state.records, (record) => record.filing_type || normalizeFilingType(record.source_form || record.source_type)));
-  const formText = Object.entries(countsByForm)
-    .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
-    .map(([form, count]) => `${escapeHtml(form)}: ${Number(count)}`)
-    .join(' · ') || 'No filing counts available';
-  els.traceBrief.innerHTML = `<p><strong>${state.records.length}</strong> records loaded across <strong>${Math.max((state.metadata.coverage_lanes || []).length, EXPECTED_LANES.length)}</strong> supported SEC lanes.</p>
-    <p>Lookback: <strong>${escapeHtml(state.metadata.lookback_days || 'unknown')}</strong> days · Data mode: <strong>${escapeHtml(state.metadata.data_mode || '-')}</strong></p>
-    <p>${formText}</p>
-    <p class="trace-note">Current coverage is SEC watchlist only, not the full SEC universe.</p>`;
-}
+def main() -> int:
+    companies = load_watchlist()
+    records = collect_ownership_records(companies)
+    print(json.dumps({"records_found": len(records)}, indent=2))
+    return 0
 
-function renderAll() {
-  const queue = state.filtered.slice(0, 10);
 
-  renderCards(els.evidenceQueue, queue, 'No evidence-queue records match the current filters.', true);
-  renderCards(els.visibleRecordStack, state.filtered, 'No visible records match the current filters.', false);
-  renderTable();
-
-  const countText = `${state.filtered.length} visible of ${state.records.length} records`;
-  els.visibleCount.textContent = countText;
-  els.tableCount.textContent = countText;
-}
-
-function activeEmptyStateMessage(defaultMessage) {
-  const selectedFilingType = els.filingTypeFilter ? els.filingTypeFilter.value : 'all';
-  const selectedSource = els.sourceFilter ? els.sourceFilter.value : 'all';
-  const selectedTimeWindow = els.timeWindowFilter ? els.timeWindowFilter.value : 'all';
-  if (selectedFilingType === 'all' && selectedSource === 'all') return defaultMessage;
-  const parts = [];
-  if (selectedFilingType !== 'all') parts.push(`filing type ${selectedFilingType}`);
-  if (selectedSource !== 'all') parts.push(`source lane ${selectedSource}`);
-  if (selectedTimeWindow !== 'all') parts.push(`last ${selectedTimeWindow} days`);
-  const diagnosticHint = diagnosticSummaryText();
-  return `No records match ${parts.join(' / ')}. ${diagnosticHint}`;
-}
-
-function diagnosticSummaryText() {
-  const diagnostics = state.metadata.lane_diagnostics || {};
-  const ownership = diagnostics.ownership_13d_13g;
-  const institutional = diagnostics.institutional_13f;
-  const proposed = diagnostics.proposed_sales_144;
-  const parts = [];
-  if (ownership) parts.push(`Ownership lane: ${laneStatusLabel(ownership.status)}, ${ownership.records_added || 0} records`);
-  if (institutional) parts.push(`13F lane: ${laneStatusLabel(institutional.status)}, ${institutional.records_added || 0} records`);
-  if (proposed) parts.push(`Form 144 lane: ${laneStatusLabel(proposed.status)}, ${proposed.records_added || 0} records`);
-  if (parts.length) return parts.join('; ') + '.';
-  return 'No lane diagnostics are available in this data file.';
-}
-
-function renderCards(container, records, emptyMessage, openFirst = false) {
-  container.innerHTML = '';
-  if (!records.length) {
-    container.innerHTML = `<p class="empty-state">${escapeHtml(activeEmptyStateMessage(emptyMessage))}</p>`;
-    return;
-  }
-  records.forEach((record, index) => {
-    container.appendChild(createCard(record, openFirst && index === 0));
-  });
-}
-
-function renderDl(dl, obj) {
-  if (!dl) return;
-  const entries = Object.entries(obj || {}).filter(([_, value]) => value !== undefined && value !== null && value !== '');
-  dl.innerHTML = entries.length ? entries.map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join('') : '<div><dt>Status</dt><dd>Not disclosed / not parsed</dd></div>';
-}
-
-function extractionLabel(record) {
-  const q = record.extraction_quality || {};
-  const status = String(q.status || 'minimal');
-  const missing = Array.isArray(q.missing_fields) ? q.missing_fields.length : 0;
-  return `${status.charAt(0).toUpperCase()}${status.slice(1)}${missing ? ` · ${missing} missing` : ''}`;
-}
-
-function createCard(record, expanded = false) {
-  const node = els.template.content.firstElementChild.cloneNode(true);
-  if (recordMatchesHighlight(record)) node.classList.add('highlight-match');
-  const button = node.querySelector('.record-summary');
-  const indicator = node.querySelector('.expand-indicator');
-
-  node.querySelector('.ticker').textContent = record.ticker;
-  node.querySelector('.event-title').textContent = record.event_type;
-  node.querySelector('.company-line').textContent = record.company;
-  node.querySelector('.score-pill').textContent = `Score ${record.score}`;
-
-  const lanePill = node.querySelector('.lane-pill');
-  if (lanePill) {
-    lanePill.textContent = isProposedSale(record) ? 'Proposed Sale' : isInstitutional(record) ? 'Institutional' : isOwnership(record) ? 'Ownership' : String(record.source_group || 'Source').replace(/^SEC\s+/i, '');
-    lanePill.classList.add(isProposedSale(record) ? 'lane-proposed' : isInstitutional(record) ? 'lane-institutional' : isOwnership(record) ? 'lane-ownership' : 'lane-insider');
-  }
-  const filingPill = node.querySelector('.filing-pill');
-  if (filingPill) filingPill.textContent = record.filing_type || normalizeFilingType(record.source_form || record.source_type);
-
-  const grade = node.querySelector('.grade-pill');
-  grade.textContent = `Evidence ${record.evidence_grade}`;
-  grade.classList.add(`grade-${String(record.evidence_grade).toLowerCase().charAt(0)}`);
-
-  const action = node.querySelector('.action-pill');
-  action.textContent = record.actionability;
-  action.classList.add(actionClass(record.actionability));
-
-  node.querySelector('.freshness-pill').textContent = record.freshness;
-  node.querySelector('.filer').textContent = record.filer;
-  node.querySelector('.source').textContent = record.source_type || record.source_form;
-  node.querySelector('.filed').textContent = formatDate(record.filed_date);
-  const vital = node.querySelector('.vital-point');
-  if (vital) vital.textContent = record.vital_point || `${record.event_type || 'Record'} for ${record.ticker || '-'}.`;
-  const extractionStatus = node.querySelector('.extraction-status');
-  if (extractionStatus) extractionStatus.textContent = extractionLabel(record);
-  renderDl(node.querySelector('.key-figures'), record.key_figures);
-  renderDl(node.querySelector('.person-entity'), record.person_entity);
-  renderDl(node.querySelector('.source-trust'), record.source_trust);
-  node.querySelector('.caveat').textContent = record.caveat;
-  node.querySelector('.method-line').textContent = methodologyLine(record);
-
-  const badge = node.querySelector('.watchlist-badge');
-  if (!record.watchlist_match) badge.classList.add('hidden');
-
-  fillList(node.querySelector('.rank-reasons'), record.rank_reasons);
-  fillList(node.querySelector('.does-not-prove'), record.does_not_prove);
-
-  const source = node.querySelector('.source-link');
-  source.href = record.source_url;
-  source.textContent = 'View source record';
-
-  setExpanded(node, button, indicator, expanded);
-  button.addEventListener('click', () => {
-    setExpanded(node, button, indicator, node.classList.contains('collapsed'));
-  });
-
-  return node;
-}
-
-function setExpanded(node, button, indicator, expanded) {
-  node.classList.toggle('collapsed', !expanded);
-  node.classList.toggle('expanded', expanded);
-  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  indicator.textContent = expanded ? 'Collapse' : 'Expand';
-}
-
-function actionClass(actionability) {
-  return {
-    'Research Now': 'action-research',
-    'Watch': 'action-watch',
-    'Context Only': 'action-context',
-    'Low Signal': 'action-low',
-  }[actionability] || 'action-context';
-}
-
-function methodologyLine(record) {
-  const pieces = [];
-  if (record.record_type) pieces.push(record.record_type);
-  if (record.watchlist_match) pieces.push('watchlist relevance');
-  if (record.freshness) pieces.push(`${String(record.freshness).toLowerCase()} record`);
-  pieces.push(`score ${record.score}`);
-  return `Ranked by ${pieces.join(' + ')}; uncertainty and caveats remain attached to the record.`;
-}
-
-function fillList(list, items = []) {
-  list.innerHTML = '';
-  for (const item of items) {
-    const li = document.createElement('li');
-    li.textContent = item;
-    list.appendChild(li);
-  }
-}
-
-function renderTable() {
-  if (!state.filtered.length) {
-    els.recordsTable.innerHTML = '<p class="empty-state">No records match the current filters.</p>';
-    return;
-  }
-
-  const rows = state.filtered.map((record) => `
-    <tr>
-      <td><strong>${escapeHtml(record.ticker)}</strong><div class="table-sub">${escapeHtml(record.company)}</div></td>
-      <td>${escapeHtml(record.event_type)}<div class="table-sub">${escapeHtml(record.record_type)}</div></td>
-      <td>${escapeHtml(record.filing_type || normalizeFilingType(record.source_form || record.source_type))}<div class="table-sub">${escapeHtml(record.source_group)}</div></td>
-      <td>${escapeHtml(record.filer)}<div class="table-sub">${escapeHtml(record.source_form)}</div></td>
-      <td>${record.score}</td>
-      <td>${escapeHtml(record.evidence_grade)}</td>
-      <td>${escapeHtml(record.actionability)}<div class="table-sub">${escapeHtml(record.freshness)}</div></td>
-      <td>${escapeHtml(extractionLabel(record))}</td>
-      <td>${formatDate(record.filed_date)}</td>
-      <td><a href="${record.source_url}" target="_blank" rel="noopener noreferrer">Source</a></td>
-    </tr>
-  `).join('');
-
-  els.recordsTable.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Ticker</th>
-          <th>Event</th>
-          <th>Filing</th>
-          <th>Filer</th>
-          <th>Score</th>
-          <th>Grade</th>
-          <th>Action</th>
-          <th>Extraction</th>
-          <th>Filed</th>
-          <th>Link</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-function exportCsv() {
-  const headers = ['record_id','ticker','company','source_group','source_type','filing_type','event_type','vital_point','record_type','entity_type','filer','role','owner_type','shares','price','transaction_value','market_value','ownership_percent','filed_date','event_date','period_end','accession_number','score','evidence_grade','freshness','actionability','extraction_status','caveat','source_url'];
-  const lines = [headers.join(',')];
-  for (const record of state.filtered) {
-    lines.push(headers.map((header) => csvCell(header === 'extraction_status' ? ((record.extraction_quality || {}).status || '') : record[header])).join(','));
-  }
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'capital_trace_visible_records.csv';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-function csvCell(value) {
-  const text = String(value ?? '');
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
-function formatDate(value, short = false) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric', month: short ? 'short' : 'long', day: 'numeric',
-    ...(short ? {} : { hour: 'numeric', minute: '2-digit' })
-  }).format(date);
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-els.refreshButton.addEventListener('click', () => loadRecords({ manual: true }));
-els.exportButton.addEventListener('click', exportCsv);
-els.searchInput.addEventListener('input', applyFilters);
-els.typeFilter.addEventListener('change', applyFilters);
-if (els.sourceFilter) els.sourceFilter.addEventListener('change', applyFilters);
-if (els.filingTypeFilter) els.filingTypeFilter.addEventListener('change', applyFilters);
-if (els.timeWindowFilter) els.timeWindowFilter.addEventListener('change', applyFilters);
-if (els.displayModeFilter) els.displayModeFilter.addEventListener('change', applyFilters);
-els.actionFilter.addEventListener('change', applyFilters);
-if (els.focusFilter) els.focusFilter.addEventListener('change', applyFilters);
-els.minScore.addEventListener('input', applyFilters);
-els.watchlistOnly.addEventListener('change', applyFilters);
-els.hideLowSignal.addEventListener('change', applyFilters);
-
-loadRecords();
-if (location.protocol !== 'file:') {
-  setInterval(() => loadRecords({ silent: true }), DASHBOARD_CHECK_INTERVAL_MS);
-}
+if __name__ == "__main__":
+    raise SystemExit(main())
