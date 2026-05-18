@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capital Trace data integrity audit v0.12h.
+"""Capital Trace data integrity audit v0.12l.
 
 Run from the repository root after a refresh:
     python scripts/audit_data_integrity.py
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -20,6 +21,8 @@ from extraction_utils import normalize_13f_market_value
 
 DATA_PATH = Path("data/capital_trace.json")
 SEVERE_SINGLE_13F_VALUE_USD = 2_000_000_000_000
+FAIL_ON_SEC_BLOCK = os.environ.get("CAPITAL_TRACE_FAIL_ON_SEC_BLOCK", "false").strip().lower() in {"1", "true", "yes"}
+
 REQUIRED_DIAGNOSTIC_LANES = [
     "insider_form4",
     "ownership_13d_13g",
@@ -81,6 +84,18 @@ def main() -> int:
 
     if isinstance(payload, dict):
         diagnostics = payload.get("lane_diagnostics") or {}
+        metadata = payload.get("metadata") or {}
+        sec_stats = metadata.get("sec_request_stats") if isinstance(metadata, dict) else {}
+        if FAIL_ON_SEC_BLOCK and isinstance(sec_stats, dict):
+            if sec_stats.get("circuit_open") or int(sec_stats.get("http_403_count") or 0) >= int(sec_stats.get("max_403_errors") or 999999):
+                severe.append(
+                    f"SEC source access blocked: {sec_stats.get('http_403_count')} HTTP 403 responses; circuit_open={sec_stats.get('circuit_open')}. Refusing a fake-green refresh."
+                )
+        latest_diags = payload.get("latest_refresh_diagnostics") or (metadata.get("latest_refresh_diagnostics") if isinstance(metadata, dict) else {}) or {}
+        if FAIL_ON_SEC_BLOCK and isinstance(latest_diags, dict):
+            for lname, ldiag in latest_diags.items():
+                if isinstance(ldiag, dict) and ldiag.get("status") == "failed" and any("403" in str(e) or "denied" in str(e).lower() for e in (ldiag.get("errors") or [])):
+                    severe.append(f"latest refresh lane failed from SEC access denial: {lname}")
         for lane in REQUIRED_DIAGNOSTIC_LANES:
             if lane not in diagnostics:
                 warnings.append(f"lane_diagnostics missing expected lane: {lane}")
