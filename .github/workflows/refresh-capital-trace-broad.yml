@@ -29,22 +29,31 @@ jobs:
         env:
           CAPITAL_TRACE_REFRESH_SCOPE: "broad"
           CAPITAL_TRACE_ISSUER_WATCHLIST_MODE: "sp500"
+          CAPITAL_TRACE_USE_INDEX_SCAN: "true"
+          CAPITAL_TRACE_INDEX_SCAN_REPLACES_ISSUER_LANES: "true"
+          CAPITAL_TRACE_INDEX_LOOKBACK_DAYS: "14"
+          CAPITAL_TRACE_INDEX_MAX_DAYS: "14"
+          CAPITAL_TRACE_RUN_13F: "false"
           CAPITAL_TRACE_LOOKBACK_DAYS: "180"
           CAPITAL_TRACE_MAX_ISSUERS_PER_RUN: "75"
           CAPITAL_TRACE_MAX_FORM4_PER_COMPANY: "100"
           CAPITAL_TRACE_MAX_OUTPUT_RECORDS: "5000"
-          CAPITAL_TRACE_SEC_REQUEST_DELAY_SECONDS: "0.75"
+          CAPITAL_TRACE_SEC_REQUEST_DELAY_SECONDS: "1.5"
           CAPITAL_TRACE_SEC_MAX_403_ERRORS: "10"
           CAPITAL_TRACE_DISABLE_OWNERSHIP_BROWSE_FALLBACK: "true"
           CAPITAL_TRACE_EMPTY_DATA_GUARD: "true"
-          CAPITAL_TRACE_USER_AGENT: "CapitalTrace/0.12j-broad rutenmeister@users.noreply.github.com"
+          CAPITAL_TRACE_MERGE_PREVIOUS_RECORDS: "true"
+          CAPITAL_TRACE_FAIL_ON_SEC_BLOCK: "true"
+          CAPITAL_TRACE_USER_AGENT: "Edgefield Systems LLC rutenmeister@users.noreply.github.com"
         run: python scripts/refresh_capital_trace.py
 
       - name: Audit generated data integrity
+        env:
+          CAPITAL_TRACE_FAIL_ON_SEC_BLOCK: "true"
         run: python scripts/audit_data_integrity.py
 
       - name: Commit updated data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Refresh Capital Trace broad S&P 500 SEC data"
+          commit_message: "Refresh Capital Trace broad SEC index data with access proof"
           file_pattern: data/capital_trace.json
