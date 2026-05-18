@@ -1,37 +1,5 @@
 const DASHBOARD_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_ORDER = ['complete', 'partial', 'minimal', 'failed'];
-const EVIDENCE_QUEUE_DISPLAY_LIMIT = 20;
-
-const EXPECTED_LANES = [
-  {
-    key: 'insider_form4',
-    label: 'SEC Form 4',
-    lane: 'insider',
-    forms: ['Form 4', '4', '4/A'],
-    match: (record) => !isOwnership(record) && !isInstitutional(record) && !isProposedSale(record),
-  },
-  {
-    key: 'ownership_13d_13g',
-    label: 'SEC 13D/G Ownership',
-    lane: 'ownership',
-    forms: ['SC 13D', 'SC 13D/A', 'SC 13G', 'SC 13G/A'],
-    match: (record) => isOwnership(record),
-  },
-  {
-    key: 'institutional_13f',
-    label: 'SEC 13F Institutional Holdings',
-    lane: 'institutional',
-    forms: ['13F-HR', '13F-HR/A'],
-    match: (record) => isInstitutional(record),
-  },
-  {
-    key: 'proposed_sales_144',
-    label: 'SEC Form 144 Proposed Sales',
-    lane: 'proposed_sales',
-    forms: ['Form 144', '144', '144/A'],
-    match: (record) => isProposedSale(record),
-  },
-];
 
 const state = {
   records: [],
@@ -79,129 +47,8 @@ const els = {
   sourceCoverage: document.querySelector('#sourceCoverage'),
   laneHealth: document.querySelector('#laneHealth'),
   traceBrief: document.querySelector('#traceBrief'),
-  extractionHealth: document.querySelector('#extractionHealth'),
   template: document.querySelector('#recordCardTemplate'),
 };
-
-function setText(selectorOrNode, value) {
-  const node = typeof selectorOrNode === 'string' ? document.querySelector(selectorOrNode) : selectorOrNode;
-  if (node) node.textContent = value == null || value === '' ? '-' : String(value);
-}
-
-function setHtml(selectorOrNode, value) {
-  const node = typeof selectorOrNode === 'string' ? document.querySelector(selectorOrNode) : selectorOrNode;
-  if (node) node.innerHTML = value == null ? '' : String(value);
-}
-
-function firstArray(...candidates) {
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) return candidate;
-    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
-      const vals = Object.values(candidate);
-      if (vals.length && vals.every((v) => v && typeof v === 'object')) return vals;
-    }
-  }
-  return [];
-}
-
-function toNumber(value, fallback = 0) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (value === null || value === undefined || value === '') return fallback;
-  const raw = String(value).trim();
-  const unitMatch = raw.match(/^\$?\s*([+-]?[0-9,.]+)\s*([KMBT])?\s*%?$/i);
-  if (unitMatch) {
-    const base = Number(unitMatch[1].replace(/,/g, ''));
-    if (Number.isFinite(base)) {
-      const unit = String(unitMatch[2] || '').toUpperCase();
-      const multiplier = unit === 'T' ? 1e12 : unit === 'B' ? 1e9 : unit === 'M' ? 1e6 : unit === 'K' ? 1e3 : 1;
-      return base * multiplier;
-    }
-  }
-  const cleaned = raw.replace(/[$,%\s,]/g, '');
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function is13FLikeRecord(record = {}) {
-  const text = [record.filing_type, record.source_form, record.source_type, record.source_group, record.record_type].join(' ').toLowerCase();
-  return text.includes('13f') || text.includes('institutional');
-}
-
-function formatMoneyDisplay(value) {
-  const n = toNumber(value, null);
-  if (n === null || !Number.isFinite(n)) return 'Not disclosed / not parsed';
-  const sign = n < 0 ? '-' : '';
-  const abs = Math.abs(n);
-  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-  return `${sign}$${abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function normalize13FMarketValue(record = {}) {
-  if (!is13FLikeRecord(record)) return toNumber(record.market_value || record.transaction_value || record.estimated_value, 0);
-  const rawThousands = toNumber(record.reported_market_value_thousands, null);
-  if (rawThousands !== null && Number.isFinite(rawThousands)) return rawThousands * 1000;
-  const explicitUsd = toNumber(record.reported_market_value_usd, null);
-  if (explicitUsd !== null && Number.isFinite(explicitUsd)) return explicitUsd;
-  let value = toNumber(record.market_value || record.transaction_value || record.estimated_value, 0);
-  // Guard legacy v0.12 data that displayed single 13F holdings 1,000x too high.
-  // Example: Berkshire AAPL should be ~$20.47B, not $20,471.92B.
-  if (value >= 2e12) value = value / 1000;
-  return value;
-}
-
-function isCusipTicker(value = '') {
-  return /^CUSIP\s+/i.test(String(value || '').trim());
-}
-
-function displayPrimaryLabel(record = {}) {
-  const ticker = String(record.ticker || '').trim();
-  const company = String(record.company || '').trim();
-  if (ticker && ticker !== '-' && !isCusipTicker(ticker)) return ticker;
-  if (company && company !== '-') return company;
-  const cusip = String(record.cusip || '').trim();
-  return cusip ? `CUSIP ${cusip}` : '-';
-}
-
-function displayCompanyLine(record = {}) {
-  const label = displayPrimaryLabel(record);
-  const company = String(record.company || '').trim();
-  const ticker = String(record.ticker || '').trim();
-  if (company && company !== '-' && company !== label) return company;
-  if (ticker && ticker !== '-' && ticker !== label && !isCusipTicker(ticker)) return ticker;
-  return company || ticker || '-';
-}
-
-function sanitizeKeyFigures(record = {}, normalizedMarketValue = null) {
-  const figures = { ...(record.key_figures || record.figures || {}) };
-  if (is13FLikeRecord(record)) {
-    const value = normalizedMarketValue ?? normalize13FMarketValue(record);
-    figures['Reported market value'] = formatMoneyDisplay(value);
-    figures['SEC reported value basis'] = 'Converted from thousands of dollars';
-  }
-  return figures;
-}
-
-function sanitizeVitalPoint(record = {}, normalizedMarketValue = null) {
-  if (!is13FLikeRecord(record)) return record.vital_point || '';
-  const value = normalizedMarketValue ?? normalize13FMarketValue(record);
-  const filer = record.filer || record.manager_name || 'Institutional manager';
-  const ticker = displayPrimaryLabel(record) || 'reported issuer';
-  const shares = toNumber(record.shares, null);
-  const period = record.period_end || record.report_period || record.event_date || 'the reported period';
-  if (shares !== null && Number.isFinite(shares)) {
-    return `13F holding: ${filer} reported ${Math.round(shares).toLocaleString()} shares of ${ticker}, market value ${formatMoneyDisplay(value)}, as of ${period}.`;
-  }
-  return `13F holding: ${filer} reported ${ticker}, market value ${formatMoneyDisplay(value)}, as of ${period}.`;
-}
-
-function ensureArray(value) {
-  if (Array.isArray(value)) return value;
-  if (value === null || value === undefined || value === '') return [];
-  return [String(value)];
-}
 
 async function loadRecords(options = {}) {
   const { manual = false, silent = false } = options;
@@ -270,46 +117,39 @@ async function loadRecords(options = {}) {
     console.error('Capital Trace record load failed:', error);
     els.evidenceQueue.innerHTML = `<p class="empty-state">Capital Trace found the data file, but could not read its record format. ${escapeHtml(error.message || String(error))}</p>`;
     els.visibleRecordStack.innerHTML = '';
-    setSyncStatus('Data file found, but the dashboard could not render it. Upload the v0.11a render compatibility patch.', 'error');
+    setSyncStatus('Data file found, but record format could not be read. Upload the v0.5a compatibility patch.', 'error');
   }
 }
 
 function preparePayload(payload) {
-  // Compatibility layer: accepts all Capital Trace data shapes used so far and
-  // tolerates wrapped output from the refresh scripts. This prevents a UI failure
-  // when the engine adds diagnostics/trust-layer metadata around the record array.
-  const raw = payload && payload.data && !Array.isArray(payload.data) ? payload.data : payload;
-  const records = firstArray(
-    Array.isArray(payload) ? payload : null,
-    raw && raw.records,
-    raw && raw.items,
-    raw && raw.results,
-    raw && raw.data,
-    raw && raw.data && raw.data.records,
-    raw && raw.payload && raw.payload.records
-  );
+  // Compatibility layer: accepts all Capital Trace data shapes used so far:
+  // 1) [records]
+  // 2) { metadata, records }
+  // 3) { schema_version, generated_at, records }
+  // 4) { data: { metadata, records } }
+  const raw = payload && payload.data && Array.isArray(payload.data.records) ? payload.data : payload;
+  const records = Array.isArray(raw) ? raw : Array.isArray(raw.records) ? raw.records : [];
+  if (!Array.isArray(records)) throw new Error('records is not an array');
 
-  const metadataSource = Array.isArray(raw) ? {} : (raw || {});
-  const metadata = {
-    ...((metadataSource && metadataSource.metadata) || {}),
-    product: metadataSource.product || (metadataSource.metadata && metadataSource.metadata.product) || 'Capital Trace',
-    schema_version: metadataSource.schema_version || (metadataSource.metadata && metadataSource.metadata.schema_version),
-    last_refreshed: metadataSource.last_refreshed || metadataSource.generated_at || (metadataSource.metadata && metadataSource.metadata.last_refreshed),
-    last_data_update: metadataSource.last_data_update || metadataSource.generated_at || (metadataSource.metadata && metadataSource.metadata.last_data_update),
-    last_sec_check: metadataSource.last_sec_check || metadataSource.generated_at || (metadataSource.metadata && metadataSource.metadata.last_sec_check),
-    next_scheduled_check: metadataSource.next_scheduled_check || (metadataSource.metadata && metadataSource.metadata.next_scheduled_check),
-    data_mode: metadataSource.data_mode || (metadataSource.metadata && metadataSource.metadata.data_mode),
-    source_pipeline: metadataSource.source_pipeline || (metadataSource.metadata && metadataSource.metadata.source_pipeline),
-    refresh_frequency: metadataSource.refresh_frequency || (metadataSource.metadata && metadataSource.metadata.refresh_frequency),
-    source_groups: metadataSource.source_groups || (metadataSource.metadata && metadataSource.metadata.source_groups),
-    coverage_lanes: metadataSource.coverage_lanes || (metadataSource.metadata && metadataSource.metadata.coverage_lanes),
-    methodology_version: metadataSource.methodology_version || (metadataSource.metadata && metadataSource.metadata.methodology_version),
-    lane_diagnostics: metadataSource.lane_diagnostics || (metadataSource.metadata && metadataSource.metadata.lane_diagnostics),
-    lookback_days: metadataSource.lookback_days || (metadataSource.metadata && metadataSource.metadata.lookback_days),
-    supported_forms: metadataSource.supported_forms || (metadataSource.metadata && metadataSource.metadata.supported_forms),
-    counts_by_lane: metadataSource.counts_by_lane || (metadataSource.metadata && metadataSource.metadata.counts_by_lane),
-    counts_by_form: metadataSource.counts_by_form || (metadataSource.metadata && metadataSource.metadata.counts_by_form),
-    extraction_summary: metadataSource.extraction_summary || (metadataSource.metadata && metadataSource.metadata.extraction_summary),
+  const metadata = Array.isArray(raw) ? {} : {
+    ...(raw.metadata || {}),
+    product: raw.product || (raw.metadata && raw.metadata.product) || 'Capital Trace',
+    schema_version: raw.schema_version || (raw.metadata && raw.metadata.schema_version),
+    last_refreshed: raw.last_refreshed || raw.generated_at || (raw.metadata && raw.metadata.last_refreshed),
+    last_data_update: raw.last_data_update || raw.generated_at || (raw.metadata && raw.metadata.last_data_update),
+    last_sec_check: raw.last_sec_check || raw.generated_at || (raw.metadata && raw.metadata.last_sec_check),
+    next_scheduled_check: raw.next_scheduled_check || (raw.metadata && raw.metadata.next_scheduled_check),
+    data_mode: raw.data_mode || (raw.metadata && raw.metadata.data_mode),
+    source_pipeline: raw.source_pipeline || (raw.metadata && raw.metadata.source_pipeline),
+    refresh_frequency: raw.refresh_frequency || (raw.metadata && raw.metadata.refresh_frequency),
+    source_groups: raw.source_groups || (raw.metadata && raw.metadata.source_groups),
+    coverage_lanes: raw.coverage_lanes || (raw.metadata && raw.metadata.coverage_lanes),
+    methodology_version: raw.methodology_version || (raw.metadata && raw.metadata.methodology_version),
+    lane_diagnostics: raw.lane_diagnostics || (raw.metadata && raw.metadata.lane_diagnostics),
+    lookback_days: raw.lookback_days || (raw.metadata && raw.metadata.lookback_days),
+    supported_forms: raw.supported_forms || (raw.metadata && raw.metadata.supported_forms),
+    counts_by_lane: raw.counts_by_lane || (raw.metadata && raw.metadata.counts_by_lane),
+    counts_by_form: raw.counts_by_form || (raw.metadata && raw.metadata.counts_by_form),
   };
 
   return { metadata, records };
@@ -332,7 +172,7 @@ function normalizeMetadata(metadata, source) {
     coverage_lanes: metadata.coverage_lanes || metadata.source_groups || ['SEC Form 4', 'SEC 13D/G Ownership', 'SEC 13F Institutional Holdings', 'SEC Form 144 Proposed Sales'],
     methodology_version: metadata.methodology_version || '0.10',
     lane_diagnostics: metadata.lane_diagnostics || {},
-    lookback_days: metadata.lookback_days || 180,
+    lookback_days: metadata.lookback_days || 60,
     supported_forms: metadata.supported_forms || [],
     counts_by_lane: metadata.counts_by_lane || {},
     counts_by_form: metadata.counts_by_form || {},
@@ -346,17 +186,11 @@ function normalizeCapitalTraceRecord(record = {}) {
   const recordId = record.record_id || record.id || record.accession_number || [sourceType, filingType, record.ticker, record.filer, record.filed_date, record.event_type].join('|');
   const eventDate = record.event_date || record.transaction_date || record.period_end || record.filed_date || '';
 
-  const normalized13FMarketValue = normalize13FMarketValue(record);
-  const normalizedMarketValue = is13FLikeRecord(record) ? normalized13FMarketValue : toNumber(record.market_value || record.transaction_value || record.estimated_value, 0);
-  const normalizedTransactionValue = is13FLikeRecord(record) ? normalized13FMarketValue : toNumber(record.transaction_value || record.estimated_value || record.market_value, 0);
-
   return {
     id: record.id || recordId,
     record_id: recordId,
     ticker: record.ticker || '-',
     company: record.company || '-',
-    display_label: displayPrimaryLabel(record),
-    display_subtitle: displayCompanyLine(record),
     source_group: record.source_group || inferSourceGroup(sourceType),
     source_type: sourceType,
     source_form: rawSourceForm || sourceType,
@@ -377,28 +211,14 @@ function normalizeCapitalTraceRecord(record = {}) {
     freshness: record.freshness || 'Unclassified',
     actionability: record.actionability || 'Context Only',
     watchlist_match: Boolean(record.watchlist_match),
-    rank_reasons: ensureArray(record.rank_reasons),
-    does_not_prove: ensureArray(record.does_not_prove),
+    rank_reasons: Array.isArray(record.rank_reasons) ? record.rank_reasons : [],
+    does_not_prove: Array.isArray(record.does_not_prove) ? record.does_not_prove : [],
     caveat: record.caveat || 'Source record requires additional review before use.',
     source_url: record.source_url || '#',
     transaction_code: record.transaction_code || '',
-    transaction_value: normalizedTransactionValue,
-    market_value: normalizedMarketValue,
-    reported_market_value_thousands: toNumber(record.reported_market_value_thousands, null),
-    reported_market_value_usd: normalized13FMarketValue,
-    shares: toNumber(record.shares || record.proposed_shares || record.beneficial_shares, 0),
-    price: toNumber(record.price || record.share_price, 0),
-    shares_after: toNumber(record.shares_after || record.ownership_after, 0),
-    ownership_percent: toNumber(record.ownership_percent, null),
-    broker: record.broker || '',
-    cusip: record.cusip || '',
-    position_rank: record.position_rank || '',
-    report_period: record.report_period || record.period_end || '',
-    vital_point: sanitizeVitalPoint(record, normalizedMarketValue),
-    key_figures: sanitizeKeyFigures(record, normalizedMarketValue),
-    person_entity: record.person_entity || record.person || record.entity || {},
-    source_trust: record.source_trust || record.trust || {},
-    extraction_quality: record.extraction_quality || { status: 'minimal', missing_fields: [], parsed_fields: [], notes: [] }
+    transaction_value: Number(record.transaction_value || 0),
+    shares: Number(record.shares || 0),
+    price: Number(record.price || 0)
   };
 }
 
@@ -452,8 +272,6 @@ function isPurchase(record) {
 }
 
 function isSale(record) {
-  // Proposed-sale notices are not confirmed insider sales. Keep them out of sale counts/filters.
-  if (isProposedSale(record)) return false;
   return String(record.transaction_code || '').toUpperCase() === 'S' || String(record.event_type || '').toLowerCase().includes('sale');
 }
 
@@ -656,29 +474,13 @@ function populateFilingTypeFilter() {
   els.filingTypeFilter.value = filingTypes.includes(current) ? current : 'all';
 }
 
-function parseCapitalTraceDate(value) {
-  if (!value) return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  let parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) return parsed;
-  const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (mdy) {
-    const year = mdy[3].length === 2 ? Number(`20${mdy[3]}`) : Number(mdy[3]);
-    parsed = new Date(Date.UTC(year, Number(mdy[1]) - 1, Number(mdy[2])));
-    if (!Number.isNaN(parsed.getTime())) return parsed;
-  }
-  return null;
-}
-
 function recordWithinWindow(record, selectedTimeWindow) {
   if (!selectedTimeWindow || selectedTimeWindow === 'all') return true;
   const days = Number(selectedTimeWindow);
   if (!Number.isFinite(days) || days <= 0) return true;
   const rawDate = record.filed_date || record.event_date || record.transaction_date || record.period_end;
-  const date = parseCapitalTraceDate(rawDate);
-  if (!date) return true;
+  const date = new Date(rawDate);
+  if (Number.isNaN(date.getTime())) return true;
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   return date.getTime() >= cutoff;
 }
@@ -744,31 +546,10 @@ function applyFilters() {
   });
 
   if (selectedFocus === 'top10') {
-    state.filtered = state.filtered.slice().sort((a, b) => b.score - a.score).slice(0, EVIDENCE_QUEUE_DISPLAY_LIMIT);
-  }
-
-  if (selectedFocus === 'top_vital') {
-    state.filtered = state.filtered
-      .filter((record) => topVitalScore(record) >= 55)
-      .sort((a, b) => topVitalScore(b) - topVitalScore(a))
-      .slice(0, 20);
+    state.filtered = state.filtered.slice().sort((a, b) => b.score - a.score).slice(0, 10);
   }
 
   renderAll();
-}
-
-function topVitalScore(record) {
-  let score = Number(record.score || 0);
-  const status = String((record.extraction_quality || {}).status || 'minimal').toLowerCase();
-  if (status === 'complete') score += 18;
-  else if (status === 'partial') score += 10;
-  else if (status === 'minimal') score -= 8;
-  else if (status === 'failed') score -= 20;
-  if (record.transaction_value || record.market_value || record.ownership_percent) score += 8;
-  if (isPurchase(record) || isOwnership(record) || isInstitutional(record) || isProposedSale(record)) score += 3;
-  if (record.actionability === 'Research Now') score += 8;
-  if (record.actionability === 'Low Signal') score -= 15;
-  return score;
 }
 
 function updateBrief() {
@@ -797,8 +578,8 @@ function updateBrief() {
   els.readoutWatch.textContent = watch;
   els.readoutContext.textContent = context;
   els.readoutHidden.textContent = lowSignal;
-  setText(els.briefTitle, `${researchNow} high-signal record${researchNow === 1 ? '' : 's'}`);
-  setText(els.briefText, `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${institutional} institutional records, ${proposedSales} proposed-sale notices, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Extraction: ${Object.entries(extractionCounts).map(([k, v]) => `${k} ${v}`).join(', ')}. Low-signal records can stay hidden by default.`);
+  els.briefTitle.textContent = `${researchNow} high-signal record${researchNow === 1 ? '' : 's'}`;
+  els.briefText.textContent = `${state.metadata.data_mode === 'sample' ? 'Current sample' : 'Current data file'} contains ${total} public records. Current mix: ${purchases} purchase records, ${sales} sale records, ${ownership} ownership records, ${institutional} institutional records, ${proposedSales} proposed-sale notices, ${watchlist} watchlist matches. Strongest lane: ${topLane}. Extraction: ${Object.entries(extractionCounts).map(([k, v]) => `${k} ${v}`).join(', ')}. Low-signal records can stay hidden by default.`;
 
   if (els.lastSecCheck) els.lastSecCheck.textContent = formatDate(state.metadata.last_sec_check, true);
   if (els.nextSecCheck) els.nextSecCheck.textContent = formatDate(state.metadata.next_scheduled_check, true);
@@ -809,7 +590,6 @@ function updateBrief() {
   }
   renderLaneHealth();
   renderTraceBrief();
-  renderExtractionHealth();
 }
 
 function laneStatusLabel(status) {
@@ -836,8 +616,7 @@ function deriveLaneDiagnostics() {
         key: lane.key,
         label: lane.label,
         forms_checked: existing.forms_checked || lane.forms,
-        records_added: Number(existing.records_added ?? 0),
-        loaded_count: recordCount,
+        records_added: Number(existing.records_added ?? recordCount),
       };
     }
     return {
@@ -847,9 +626,8 @@ function deriveLaneDiagnostics() {
       status: 'not_reported',
       forms_checked: lane.forms,
       companies_checked: 0,
-      lookback_days: state.metadata.lookback_days || 180,
-      records_added: 0,
-      loaded_count: recordCount,
+      lookback_days: state.metadata.lookback_days || 60,
+      records_added: recordCount,
       errors: [],
       note: recordCount > 0
         ? 'Records exist for this lane, but this data file did not include lane diagnostics. Re-run the v0.10+ workflow to write diagnostics.'
@@ -865,22 +643,11 @@ function renderLaneHealth() {
     const status = diag.status || 'unknown';
     const forms = Array.isArray(diag.forms_checked) ? diag.forms_checked.join(', ') : '-';
     const errors = Array.isArray(diag.errors) ? diag.errors.length : 0;
-    const latestCount = Number(diag.records_added || 0);
-    const loadedCount = Number(diag.loaded_count ?? latestCount);
-    const guard = state.metadata.refresh_guard || {};
-    const preserved = Boolean(guard.preserved_previous_records || guard.preserved || guard.status === 'preserved_previous' || guard.preservation_reason || state.metadata.data_source_truth === 'preserved_previous_dataset');
-    const defaultNote = loadedCount
-      ? 'Loaded dataset contains records for this lane. Latest-refresh diagnostics may differ if the empty-data guard preserved a prior good dataset.'
-      : 'No records from this lane are present in the current loaded data.';
-    const note = diag.note || defaultNote;
-    const healthClass = loadedCount ? 'lane-has-records' : 'lane-zero-records';
-    const refreshLine = preserved
-      ? `Latest refresh: ${latestCount} found · prior good data preserved`
-      : `Latest refresh: ${latestCount} found`;
-    return `<div class="lane-health-row lane-status-${escapeHtml(status)} ${healthClass}">
+    const count = Number(diag.records_added || 0);
+    const note = diag.note || (count === 0 ? 'No records from this lane are present in the current loaded data.' : 'Lane has records in the current loaded data.');
+    return `<div class="lane-health-row lane-status-${escapeHtml(status)} ${count ? 'lane-has-records' : 'lane-zero-records'}">
       <div><strong>${escapeHtml(diag.label || diag.key.replaceAll('_', ' '))}</strong><small>${escapeHtml(forms)}</small></div>
-      <div><span>${escapeHtml(laneStatusLabel(status))}</span><small>${loadedCount} loaded · ${Number(diag.companies_checked || 0)} companies · ${Number(diag.lookback_days || state.metadata.lookback_days || 0)}d</small></div>
-      <p class="lane-note"><strong>Current dataset:</strong> ${loadedCount} loaded records. <strong>${escapeHtml(refreshLine)}</strong>.</p>
+      <div><span>${escapeHtml(laneStatusLabel(status))}</span><small>${count} records · ${Number(diag.companies_checked || 0)} companies · ${Number(diag.lookback_days || state.metadata.lookback_days || 0)}d</small></div>
       ${errors ? `<p class="lane-error">${errors} error${errors === 1 ? '' : 's'} logged. Review workflow output.</p>` : ''}
       ${note ? `<p class="lane-note">${escapeHtml(note)}</p>` : ''}
     </div>`;
@@ -897,45 +664,14 @@ function renderTraceBrief() {
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
     .map(([form, count]) => `${escapeHtml(form)}: ${Number(count)}`)
     .join(' · ') || 'No filing counts available';
-  const sourceTruth = state.metadata.data_source_truth || 'fresh_refresh_dataset';
-  const latestDiagnostics = state.metadata.latest_refresh_diagnostics || state.raw.latest_refresh_diagnostics || {};
-  const latestDiagnosticCount = Object.values(latestDiagnostics || {}).reduce((sum, diag) => {
-    if (!diag || typeof diag !== 'object') return sum;
-    return sum + Number(diag.records_added || 0);
-  }, 0);
-  const latestCount = Number.isFinite(latestDiagnosticCount) && Object.keys(latestDiagnostics || {}).length
-    ? latestDiagnosticCount
-    : Number(state.metadata.latest_refresh_record_count ?? state.records.length);
-  const freshBeforeMerge = Number(state.metadata.fresh_record_count_before_merge ?? latestCount);
-  const mergedPrevious = Boolean(state.metadata.merged_previous_records);
-  const preservedPrevious = Boolean(state.metadata.preserved_previous_records || sourceTruth === 'preserved_previous_dataset');
-  let truthLabel;
-  const secStats = state.metadata.sec_request_stats || {};
-  const secBlocked = Boolean(secStats.circuit_open || Number(secStats.http_403_count || 0) > 0);
-  if (secBlocked) {
-    truthLabel = `Fresh SEC scan was blocked or denied (${Number(secStats.http_403_count || 0)} HTTP 403). Loaded records are preserved prior data, not proof of a successful fresh scan.`;
-  } else if (preservedPrevious) {
-    truthLabel = `Loaded dataset was preserved from a prior good dataset; latest refresh produced ${latestCount} records and did not replace loaded records.`;
-  } else if (latestCount === 0 && state.records.length > 0) {
-    truthLabel = `Loaded dataset contains ${state.records.length} prior records, but latest-refresh diagnostics show 0 new lane records. Treat this as preserved data until scanner diagnostics prove fresh access.`;
-  } else if (mergedPrevious) {
-    truthLabel = `Loaded dataset includes ${freshBeforeMerge} fresh records merged with previous records; latest refresh added/confirmed ${latestCount} lane records.`;
-  } else {
-    truthLabel = `Loaded dataset comes from the latest refresh (${latestCount} latest lane records; ${state.records.length} loaded records).`;
-  }
-  const proof = state.metadata.sec_request_stats
-    ? `SEC requests: ${Number(state.metadata.sec_request_stats.requests_attempted || 0)} attempted · ${Number(state.metadata.sec_request_stats.http_403_count || 0)} HTTP 403 · circuit ${state.metadata.sec_request_stats.circuit_open ? 'open' : 'closed'}`
-    : '';
   els.traceBrief.innerHTML = `<p><strong>${state.records.length}</strong> records loaded across <strong>${Math.max((state.metadata.coverage_lanes || []).length, EXPECTED_LANES.length)}</strong> supported SEC lanes.</p>
     <p>Lookback: <strong>${escapeHtml(state.metadata.lookback_days || 'unknown')}</strong> days · Data mode: <strong>${escapeHtml(state.metadata.data_mode || '-')}</strong></p>
-    <p><strong>Data source truth:</strong> ${escapeHtml(truthLabel)}</p>
-    ${proof ? `<p><strong>Refresh proof:</strong> ${escapeHtml(proof)}</p>` : ''}
     <p>${formText}</p>
-    <p class="trace-note">Current coverage is preserved/repaired dataset mode. Direct GitHub SEC refresh is disabled in v0.13 until a reliable source provider is connected.</p>`;
+    <p class="trace-note">Current coverage is SEC watchlist only, not the full SEC universe.</p>`;
 }
 
 function renderAll() {
-  const queue = state.filtered.slice(0, EVIDENCE_QUEUE_DISPLAY_LIMIT);
+  const queue = state.filtered.slice(0, 10);
 
   renderCards(els.evidenceQueue, queue, 'No evidence-queue records match the current filters.', true);
   renderCards(els.visibleRecordStack, state.filtered, 'No visible records match the current filters.', false);
@@ -996,70 +732,56 @@ function extractionLabel(record) {
   return `${status.charAt(0).toUpperCase()}${status.slice(1)}${missing ? ` · ${missing} missing` : ''}`;
 }
 
-
-function renderExtractionHealth() {
-  if (!els.extractionHealth) return;
-  const counts = Object.fromEntries(countBy(state.records, (record) => String((record.extraction_quality || {}).status || 'minimal').toLowerCase()).entries());
-  const order = ['complete', 'partial', 'minimal', 'failed'];
-  const rows = order.map((key) => `${key}: ${counts[key] || 0}`).join('<br>');
-  const missingValue = state.records.filter((record) => {
-    const q = record.extraction_quality || {};
-    const missing = Array.isArray(q.missing_fields) ? q.missing_fields.join(' ').toLowerCase() : '';
-    return missing.includes('value') || missing.includes('price') || missing.includes('ownership_percent') || missing.includes('shares');
-  }).length;
-  els.extractionHealth.innerHTML = `<p>${rows}</p><p class="mini-list">Records missing at least one vital figure: ${missingValue}</p>`;
-}
-
 function createCard(record, expanded = false) {
-  if (!els.template || !els.template.content || !els.template.content.firstElementChild) return createFallbackCard(record);
   const node = els.template.content.firstElementChild.cloneNode(true);
-  const q = (sel) => node.querySelector(sel);
   if (recordMatchesHighlight(record)) node.classList.add('highlight-match');
-  node.classList.add(`extract-${String((record.extraction_quality || {}).status || 'minimal').toLowerCase()}`);
   const button = node.querySelector('.record-summary');
   const indicator = node.querySelector('.expand-indicator');
 
-  setText(q('.ticker'), record.display_label || displayPrimaryLabel(record));
-  setText(q('.event-title'), record.event_type);
-  setText(q('.company-line'), record.display_subtitle || displayCompanyLine(record));
-  setText(q('.score-pill'), `Score ${record.score}`);
+  node.querySelector('.ticker').textContent = record.ticker;
+  node.querySelector('.event-title').textContent = record.event_type;
+  node.querySelector('.company-line').textContent = record.company;
+  node.querySelector('.score-pill').textContent = `Score ${record.score}`;
 
-  const lanePill = q('.lane-pill');
+  const lanePill = node.querySelector('.lane-pill');
   if (lanePill) {
     lanePill.textContent = isProposedSale(record) ? 'Proposed Sale' : isInstitutional(record) ? 'Institutional' : isOwnership(record) ? 'Ownership' : String(record.source_group || 'Source').replace(/^SEC\s+/i, '');
     lanePill.classList.add(isProposedSale(record) ? 'lane-proposed' : isInstitutional(record) ? 'lane-institutional' : isOwnership(record) ? 'lane-ownership' : 'lane-insider');
   }
-  const filingPill = q('.filing-pill');
+  const filingPill = node.querySelector('.filing-pill');
   if (filingPill) filingPill.textContent = record.filing_type || normalizeFilingType(record.source_form || record.source_type);
 
-  const grade = q('.grade-pill');
-  if (grade) { grade.textContent = `Evidence ${record.evidence_grade}`; grade.classList.add(`grade-${String(record.evidence_grade).toLowerCase().charAt(0)}`); }
+  const grade = node.querySelector('.grade-pill');
+  grade.textContent = `Evidence ${record.evidence_grade}`;
+  grade.classList.add(`grade-${String(record.evidence_grade).toLowerCase().charAt(0)}`);
 
-  const action = q('.action-pill');
-  if (action) { action.textContent = record.actionability; action.classList.add(actionClass(record.actionability)); }
+  const action = node.querySelector('.action-pill');
+  action.textContent = record.actionability;
+  action.classList.add(actionClass(record.actionability));
 
-  setText(q('.freshness-pill'), record.freshness);
-  setText(q('.filer'), record.filer);
-  setText(q('.source'), record.source_type || record.source_form);
-  setText(q('.filed'), formatDate(record.filed_date));
-  const vital = q('.vital-point');
+  node.querySelector('.freshness-pill').textContent = record.freshness;
+  node.querySelector('.filer').textContent = record.filer;
+  node.querySelector('.source').textContent = record.source_type || record.source_form;
+  node.querySelector('.filed').textContent = formatDate(record.filed_date);
+  const vital = node.querySelector('.vital-point');
   if (vital) vital.textContent = record.vital_point || `${record.event_type || 'Record'} for ${record.ticker || '-'}.`;
-  const extractionStatus = q('.extraction-status');
+  const extractionStatus = node.querySelector('.extraction-status');
   if (extractionStatus) extractionStatus.textContent = extractionLabel(record);
-  renderDl(q('.key-figures'), record.key_figures);
-  renderDl(q('.person-entity'), record.person_entity);
-  renderDl(q('.source-trust'), record.source_trust);
-  setText(q('.caveat'), record.caveat);
-  setText(q('.method-line'), methodologyLine(record));
+  renderDl(node.querySelector('.key-figures'), record.key_figures);
+  renderDl(node.querySelector('.person-entity'), record.person_entity);
+  renderDl(node.querySelector('.source-trust'), record.source_trust);
+  node.querySelector('.caveat').textContent = record.caveat;
+  node.querySelector('.method-line').textContent = methodologyLine(record);
 
-  const badge = q('.watchlist-badge');
-  if (badge && !record.watchlist_match) badge.classList.add('hidden');
+  const badge = node.querySelector('.watchlist-badge');
+  if (!record.watchlist_match) badge.classList.add('hidden');
 
-  fillList(q('.rank-reasons'), record.rank_reasons);
-  fillList(q('.does-not-prove'), record.does_not_prove);
+  fillList(node.querySelector('.rank-reasons'), record.rank_reasons);
+  fillList(node.querySelector('.does-not-prove'), record.does_not_prove);
 
-  const source = q('.source-link');
-  if (source) { source.href = record.source_url; source.textContent = 'View source record'; }
+  const source = node.querySelector('.source-link');
+  source.href = record.source_url;
+  source.textContent = 'View source record';
 
   setExpanded(node, button, indicator, expanded);
   button.addEventListener('click', () => {
@@ -1069,27 +791,11 @@ function createCard(record, expanded = false) {
   return node;
 }
 
-
-function createFallbackCard(record) {
-  const article = document.createElement('article');
-  article.className = 'record-card soft-card expanded';
-  article.innerHTML = `
-    <div class="record-summary fallback-summary">
-      <div class="summary-main">
-        <div class="summary-topline"><span class="ticker">${escapeHtml(record.display_label || displayPrimaryLabel(record))}</span><span class="event-title">${escapeHtml(record.event_type || 'Public Record')}</span></div>
-        <p class="company-line">${escapeHtml(record.display_subtitle || displayCompanyLine(record))}</p>
-      </div>
-      <div class="summary-badges"><span class="lane-pill">${escapeHtml(record.source_group || '-')}</span><span class="filing-pill">${escapeHtml(record.filing_type || '-')}</span><span class="score-pill">Score ${escapeHtml(String(record.score || 0))}</span></div>
-    </div>
-    <div class="record-details"><p class="vital-point">${escapeHtml(record.vital_point || record.caveat || 'Record loaded; source review required.')}</p></div>`;
-  return article;
-}
-
 function setExpanded(node, button, indicator, expanded) {
   node.classList.toggle('collapsed', !expanded);
   node.classList.toggle('expanded', expanded);
-  if (button) button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  if (indicator) indicator.textContent = expanded ? 'Collapse' : 'Expand';
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  indicator.textContent = expanded ? 'Collapse' : 'Expand';
 }
 
 function actionClass(actionability) {
@@ -1111,7 +817,6 @@ function methodologyLine(record) {
 }
 
 function fillList(list, items = []) {
-  if (!list) return;
   list.innerHTML = '';
   for (const item of items) {
     const li = document.createElement('li');
@@ -1128,7 +833,7 @@ function renderTable() {
 
   const rows = state.filtered.map((record) => `
     <tr>
-      <td><strong>${escapeHtml(record.display_label || displayPrimaryLabel(record))}</strong><div class="table-sub">${escapeHtml(record.display_subtitle || displayCompanyLine(record))}</div></td>
+      <td><strong>${escapeHtml(record.ticker)}</strong><div class="table-sub">${escapeHtml(record.company)}</div></td>
       <td>${escapeHtml(record.event_type)}<div class="table-sub">${escapeHtml(record.record_type)}</div></td>
       <td>${escapeHtml(record.filing_type || normalizeFilingType(record.source_form || record.source_type))}<div class="table-sub">${escapeHtml(record.source_group)}</div></td>
       <td>${escapeHtml(record.filer)}<div class="table-sub">${escapeHtml(record.source_form)}</div></td>
@@ -1211,7 +916,6 @@ if (els.sourceFilter) els.sourceFilter.addEventListener('change', applyFilters);
 if (els.filingTypeFilter) els.filingTypeFilter.addEventListener('change', applyFilters);
 if (els.timeWindowFilter) els.timeWindowFilter.addEventListener('change', applyFilters);
 if (els.displayModeFilter) els.displayModeFilter.addEventListener('change', applyFilters);
-if (els.extractionFilter) els.extractionFilter.addEventListener('change', applyFilters);
 els.actionFilter.addEventListener('change', applyFilters);
 if (els.focusFilter) els.focusFilter.addEventListener('change', applyFilters);
 els.minScore.addEventListener('input', applyFilters);
