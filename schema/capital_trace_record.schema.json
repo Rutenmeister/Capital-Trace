@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Capital Trace v0.12a Data Payload",
+  "title": "Capital Trace v0.12c Data Payload",
   "type": "object",
   "required": ["schema_version", "data_mode", "generated_at", "records", "lane_diagnostics"],
   "properties": {
@@ -80,5 +80,5 @@
       "additionalProperties": true
     }
   },
-  "$comment": "Capital Trace v0.12a normalized public-capital record schema. Includes explicit 13F market-value unit fields to prevent 1,000x display errors."
+  "$comment": "Capital Trace v0.12c normalized public-capital record schema. Includes explicit 13F market-value unit fields and cross-lane integrity safeguards to prevent misleading figures."
 }

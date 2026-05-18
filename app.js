@@ -1,5 +1,6 @@
 const DASHBOARD_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_ORDER = ['complete', 'partial', 'minimal', 'failed'];
+const EVIDENCE_QUEUE_DISPLAY_LIMIT = 20;
 
 const EXPECTED_LANES = [
   {
@@ -719,7 +720,7 @@ function applyFilters() {
   });
 
   if (selectedFocus === 'top10') {
-    state.filtered = state.filtered.slice().sort((a, b) => b.score - a.score).slice(0, 10);
+    state.filtered = state.filtered.slice().sort((a, b) => b.score - a.score).slice(0, EVIDENCE_QUEUE_DISPLAY_LIMIT);
   }
 
   if (selectedFocus === 'top_vital') {
@@ -811,7 +812,8 @@ function deriveLaneDiagnostics() {
         key: lane.key,
         label: lane.label,
         forms_checked: existing.forms_checked || lane.forms,
-        records_added: Number(existing.records_added ?? recordCount),
+        records_added: Number(existing.records_added ?? 0),
+        loaded_count: recordCount,
       };
     }
     return {
@@ -822,7 +824,8 @@ function deriveLaneDiagnostics() {
       forms_checked: lane.forms,
       companies_checked: 0,
       lookback_days: state.metadata.lookback_days || 180,
-      records_added: recordCount,
+      records_added: 0,
+      loaded_count: recordCount,
       errors: [],
       note: recordCount > 0
         ? 'Records exist for this lane, but this data file did not include lane diagnostics. Re-run the v0.10+ workflow to write diagnostics.'
@@ -838,11 +841,22 @@ function renderLaneHealth() {
     const status = diag.status || 'unknown';
     const forms = Array.isArray(diag.forms_checked) ? diag.forms_checked.join(', ') : '-';
     const errors = Array.isArray(diag.errors) ? diag.errors.length : 0;
-    const count = Number(diag.records_added || 0);
-    const note = diag.note || (count === 0 ? 'No records from this lane are present in the current loaded data.' : 'Lane has records in the current loaded data.');
-    return `<div class="lane-health-row lane-status-${escapeHtml(status)} ${count ? 'lane-has-records' : 'lane-zero-records'}">
+    const latestCount = Number(diag.records_added || 0);
+    const loadedCount = Number(diag.loaded_count ?? latestCount);
+    const guard = state.metadata.refresh_guard || {};
+    const preserved = Boolean(guard.preserved_previous_records || guard.preserved || guard.status === 'preserved_previous');
+    const defaultNote = loadedCount
+      ? 'Loaded dataset contains records for this lane. Latest-refresh diagnostics may differ if the empty-data guard preserved a prior good dataset.'
+      : 'No records from this lane are present in the current loaded data.';
+    const note = diag.note || defaultNote;
+    const healthClass = loadedCount ? 'lane-has-records' : 'lane-zero-records';
+    const refreshLine = preserved
+      ? `Latest refresh: ${latestCount} found · prior good data preserved`
+      : `Latest refresh: ${latestCount} found`;
+    return `<div class="lane-health-row lane-status-${escapeHtml(status)} ${healthClass}">
       <div><strong>${escapeHtml(diag.label || diag.key.replaceAll('_', ' '))}</strong><small>${escapeHtml(forms)}</small></div>
-      <div><span>${escapeHtml(laneStatusLabel(status))}</span><small>${count} records · ${Number(diag.companies_checked || 0)} companies · ${Number(diag.lookback_days || state.metadata.lookback_days || 0)}d</small></div>
+      <div><span>${escapeHtml(laneStatusLabel(status))}</span><small>${loadedCount} loaded · ${Number(diag.companies_checked || 0)} companies · ${Number(diag.lookback_days || state.metadata.lookback_days || 0)}d</small></div>
+      <p class="lane-note"><strong>Current dataset:</strong> ${loadedCount} loaded records. <strong>${escapeHtml(refreshLine)}</strong>.</p>
       ${errors ? `<p class="lane-error">${errors} error${errors === 1 ? '' : 's'} logged. Review workflow output.</p>` : ''}
       ${note ? `<p class="lane-note">${escapeHtml(note)}</p>` : ''}
     </div>`;
@@ -866,7 +880,7 @@ function renderTraceBrief() {
 }
 
 function renderAll() {
-  const queue = state.filtered.slice(0, 10);
+  const queue = state.filtered.slice(0, EVIDENCE_QUEUE_DISPLAY_LIMIT);
 
   renderCards(els.evidenceQueue, queue, 'No evidence-queue records match the current filters.', true);
   renderCards(els.visibleRecordStack, state.filtered, 'No visible records match the current filters.', false);

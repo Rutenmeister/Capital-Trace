@@ -102,11 +102,15 @@ def parse_float(value: str) -> Optional[float]:
 
 def infer_filer(text: str) -> str:
     plain = compact_text(text)
+    # Keep this conservative. Generic "Name:" patterns often capture issuer,
+    # broker, or table labels in Form 144 HTML, so only use seller/reporting-person
+    # specific labels unless a structured parser is added later.
     return regex_first([
         r"Name of Person for Whose Account the Securities are To Be Sold\s*[:\-]?\s*([^|\n]{2,160})",
         r"Name of person for whose account.*?sold\s*[:\-]?\s*([^|\n]{2,160})",
         r"Reporting Person\s*[:\-]?\s*([^|\n]{2,160})",
-        r"Name\s*[:\-]?\s*([^|\n]{2,160})",
+        r"Proposed Seller\s*[:\-]?\s*([^|\n]{2,160})",
+        r"Seller\s*[:\-]?\s*([^|\n]{2,160})",
     ], plain) or "Proposed seller / reporting person"
 
 
@@ -286,7 +290,12 @@ def parse_form144_record(company: Company, filing: Dict[str, Any]) -> Optional[D
         ],
         "caveat": caveat,
         "source_url": url,
-        "vital_point": (f"Proposed sale notice: {filer} disclosed up to {shares:,.0f} shares, estimated value ${market_value:,.0f}." if shares is not None and market_value is not None else f"Proposed sale notice for {company.ticker}; proposed shares/value were not fully parsed."),
+        "vital_point": (
+            f"Proposed sale notice: {filer} disclosed up to {shares:,.0f} shares, estimated value ${market_value:,.0f}"
+            + (f", around {approx_sale_date}." if approx_sale_date else ".")
+            if shares is not None and market_value is not None
+            else f"Proposed sale notice for {company.ticker}; proposed shares/value were not fully parsed."
+        ),
     }
 
 

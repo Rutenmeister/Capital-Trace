@@ -53,25 +53,35 @@ def normalize_13f_market_value(record: Dict[str, Any]) -> tuple[Any, List[str]]:
     """Return the best 13F USD market value plus integrity notes.
 
     SEC 13F information-table value fields are reported in thousands of dollars.
-    New records should carry reported_market_value_thousands and
-    reported_market_value_usd. This helper also guards older generated records
-    that may have been accidentally scaled by 1,000 twice.
+    Capital Trace must display actual USD. This helper also guards older JSON
+    where a USD value or raw-thousands value may already have been scaled 1,000x.
     """
     notes: List[str] = []
+    severe_single_holding = 2_000_000_000_000
+
     raw_thousands = record.get("reported_market_value_thousands")
     if present(raw_thousands):
         raw_num = num(raw_thousands)
         if raw_num is not None:
+            # A raw 13F thousands value above 2B would imply a >$2T single holding.
+            # For this watchlist product that is more likely to be a legacy USD value
+            # stored in the thousands field than a real raw 13F value.
+            if raw_num >= 2_000_000_000:
+                notes.append("13F raw thousands field looked already USD-scaled; display treated it as USD.")
+                return raw_num, notes
             return int(raw_num * 1000), notes
+
     usd_explicit = record.get("reported_market_value_usd")
     if present(usd_explicit):
+        usd_num = num(usd_explicit)
+        if usd_num is not None and usd_num >= severe_single_holding:
+            notes.append("13F explicit USD value looked double-scaled; display normalized down by 1,000.")
+            return usd_num / 1000, notes
         return usd_explicit, notes
+
     value = record.get("market_value") or record.get("transaction_value")
     n = num(value)
-    if n is not None and n >= 2_000_000_000_000:
-        # A single 13F holding above $2T is far more likely to be a legacy
-        # double-scaling bug than a real holding in the current universe. Keep
-        # the correction visible in extraction notes rather than silently hiding it.
+    if n is not None and n >= severe_single_holding:
         notes.append("13F market value looked double-scaled; display normalized down by 1,000.")
         return n / 1000, notes
     return value, notes

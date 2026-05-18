@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.12 master refresh.
+Capital Trace v0.12e master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -8,7 +8,7 @@ Universal SEC filing engine + trust layer:
 - writes diagnostics so the UI can say what was checked, found, or failed
 - commits one combined data/capital_trace.json payload
 
-Supported watchlist lanes in v0.12:
+Supported watchlist lanes in v0.12e:
 - Form 4 / 4/A insider transactions
 - SC 13D, SC 13D/A, SC 13G, SC 13G/A beneficial ownership records
 - 13F-HR / 13F-HR/A institutional holdings records
@@ -40,7 +40,9 @@ from refresh_sec_13f import collect_13f_records
 from refresh_sec_144 import collect_form144_records
 from extraction_utils import postprocess_records, extraction_summary
 
-MAX_OUTPUT_RECORDS = 650
+import os
+
+MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "650"))
 SUPPORTED_FORMS = ["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "13F-HR", "13F-HR/A", "144", "144/A"]
 
 
@@ -118,16 +120,47 @@ def filing_type_counts(records: List[Dict[str, Any]]) -> Dict[str, int]:
     return counts
 
 
+def previous_record_count(previous: Dict[str, Any] | None) -> int:
+    if not previous or not isinstance(previous, dict):
+        return 0
+    prev_records = previous.get("records")
+    return len(prev_records) if isinstance(prev_records, list) else 0
+
+
+def refresh_guard_status(new_count: int, previous_count: int, diagnostics: Dict[str, Any]) -> Dict[str, Any]:
+    lane_counts = {key: int((diag or {}).get("records_added") or 0) for key, diag in diagnostics.items()}
+    all_lanes_zero = bool(lane_counts) and all(value == 0 for value in lane_counts.values())
+    suspicious_drop = previous_count >= 50 and new_count < max(10, int(previous_count * 0.25))
+    return {
+        "new_record_count": new_count,
+        "previous_record_count": previous_count,
+        "lane_record_counts": lane_counts,
+        "all_lanes_zero": all_lanes_zero,
+        "suspicious_drop": suspicious_drop,
+    }
+
+
 def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagnostics: Dict[str, Any]) -> None:
+    previous = load_previous_payload()
+    prev_count = previous_record_count(previous)
     records = postprocess_records(dedupe(records))
     records = sorted(records, key=lambda r: (int(r.get("score") or 0), str(r.get("filed_date") or "")), reverse=True)[:MAX_OUTPUT_RECORDS]
-    previous = load_previous_payload()
 
-    # Integrity guard: if all lanes fail or produce zero records, do not destroy a previously good live file.
+    # Integrity guard: never replace a previously useful live file with an empty or near-empty refresh.
+    # Important: if we preserve old records, we also preserve the diagnostics that describe
+    # the loaded dataset. The latest zero/failed attempt is moved into latest_refresh_diagnostics
+    # so the UI does not show "0 records" while old records are still loaded.
     preserved_previous_records = False
-    if not records and previous and isinstance(previous.get("records"), list) and previous.get("records"):
-        records = previous["records"]
-        preserved_previous_records = True
+    latest_refresh_diagnostics = deepcopy(diagnostics)
+    guard = refresh_guard_status(len(records), prev_count, diagnostics)
+    if previous and isinstance(previous.get("records"), list) and previous.get("records"):
+        if not records or guard["suspicious_drop"] or guard["all_lanes_zero"]:
+            records = previous["records"]
+            preserved_previous_records = True
+            guard["preservation_reason"] = "new refresh returned zero/near-zero records or all lanes zero; preserved previous live records"
+            previous_diags = previous.get("lane_diagnostics") or (previous.get("metadata") or {}).get("lane_diagnostics") or {}
+            if isinstance(previous_diags, dict) and previous_diags:
+                diagnostics = previous_diags
 
     timestamp = iso_now()
     source_groups = sorted({str(r.get("source_group") or "Unknown") for r in records}) or ["SEC Insider Ownership", "SEC Ownership Thresholds"]
@@ -136,7 +169,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     counts_by_form = filing_type_counts(records)
 
     payload = {
-        "schema_version": "0.12",
+        "schema_version": "0.12e",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -146,7 +179,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.12",
+            "schema_version": "0.12e",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
             "refresh_frequency": "hourly",
@@ -165,9 +198,12 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "counts_by_lane": counts_by_lane,
             "counts_by_form": counts_by_form,
             "preserved_previous_records": preserved_previous_records,
-            "methodology_version": "0.12-vital-point-precision-scoring-calibration",
+            "refresh_guard": guard,
+            "latest_refresh_diagnostics": latest_refresh_diagnostics,
+            "methodology_version": "0.12e-refresh-stability-dataset-truth-model",
             "extraction_summary": extraction_summary(records),
         },
+        "latest_refresh_diagnostics": latest_refresh_diagnostics,
         "records": records,
     }
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -175,7 +211,9 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     OUTPUT_JS.write_text("window.CAPITAL_TRACE_PAYLOAD = " + json.dumps(payload, indent=2, ensure_ascii=False) + ";\n", encoding="utf-8")
     print(f"[OK] wrote {OUTPUT_JSON} with {len(records)} records; lanes={json.dumps({k: v.get('records_added') for k, v in diagnostics.items()})}")
     if preserved_previous_records:
-        print("[WARN] No new records were produced; preserved previous live records instead of overwriting with empty data.")
+        print("[WARN] Refresh returned zero/near-zero records; preserved previous live records instead of overwriting good data.")
+    elif not records:
+        print("[ERROR] Refresh produced zero records and no previous records were available to preserve. Audit should fail before commit.")
 
 
 def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -203,7 +241,7 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.12 vital point precision refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.12e stability refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])
