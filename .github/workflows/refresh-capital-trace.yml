@@ -35,7 +35,7 @@ jobs:
           CAPITAL_TRACE_MAX_OUTPUT_RECORDS: "5000"
           CAPITAL_TRACE_SEC_REQUEST_DELAY_SECONDS: "0.6"
           CAPITAL_TRACE_SEC_MAX_403_ERRORS: "10"
-          CAPITAL_TRACE_EMPTY_DATA_GUARD: "false"
+          CAPITAL_TRACE_EMPTY_DATA_GUARD: "true"
           CAPITAL_TRACE_USER_AGENT: "CapitalTrace/0.12j rutenmeister@users.noreply.github.com"
         run: python scripts/refresh_capital_trace.py
 
