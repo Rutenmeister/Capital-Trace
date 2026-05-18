@@ -427,6 +427,8 @@ function isPurchase(record) {
 }
 
 function isSale(record) {
+  // Proposed-sale notices are not confirmed insider sales. Keep them out of sale counts/filters.
+  if (isProposedSale(record)) return false;
   return String(record.transaction_code || '').toUpperCase() === 'S' || String(record.event_type || '').toLowerCase().includes('sale');
 }
 
@@ -629,13 +631,29 @@ function populateFilingTypeFilter() {
   els.filingTypeFilter.value = filingTypes.includes(current) ? current : 'all';
 }
 
+function parseCapitalTraceDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  let parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+  const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (mdy) {
+    const year = mdy[3].length === 2 ? Number(`20${mdy[3]}`) : Number(mdy[3]);
+    parsed = new Date(Date.UTC(year, Number(mdy[1]) - 1, Number(mdy[2])));
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return null;
+}
+
 function recordWithinWindow(record, selectedTimeWindow) {
   if (!selectedTimeWindow || selectedTimeWindow === 'all') return true;
   const days = Number(selectedTimeWindow);
   if (!Number.isFinite(days) || days <= 0) return true;
   const rawDate = record.filed_date || record.event_date || record.transaction_date || record.period_end;
-  const date = new Date(rawDate);
-  if (Number.isNaN(date.getTime())) return true;
+  const date = parseCapitalTraceDate(rawDate);
+  if (!date) return true;
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   return date.getTime() >= cutoff;
 }
