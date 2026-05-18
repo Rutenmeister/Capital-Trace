@@ -1,4 +1,4 @@
-# Capital Trace v0.12e — Refresh Stability + Dataset Truth Model
+# Capital Trace v0.12f — 13F Unit Repair + Signal-Safe Capping
 
 Capital Trace is an Edgefield Research SEC filing terminal. It converts public SEC records into an evidence-ranked reading queue with source links, caveats, lane diagnostics, extraction quality, and vital-point summaries.
 
@@ -21,16 +21,16 @@ Capital Trace is an Edgefield Research SEC filing terminal. It converts public S
 - Scoring remains conservative: Form 144 is proposed sale context, 13F is delayed holdings context, and insider sales are treated as context unless unusually strong.
 
 
-## v0.12e/v0.12e/v0.12e integrity fixes
+## v0.12f/v0.12f/v0.12f integrity fixes
 
 - Fixes SEC 13F market-value interpretation. SEC 13F information-table `value` fields are reported in thousands of dollars; Capital Trace now stores both `reported_market_value_thousands` and converted USD fields.
 - Adds frontend guards for older live JSON records that may have been displayed 1,000x too high. Example: Berkshire/AAPL should display around `$20.47B`, not `$20,471.92B`.
 - Updates the schema so 13F value-basis fields are explicit.
 - Updates the 13F key-figure panel to show `SEC reported value basis: Converted from thousands of dollars`.
 - Keeps all missing-data language honest: not disclosed / not parsed / not applicable / pending comparison.
-- v0.12e keeps those audit checks and adds an empty-dataset guard so all-zero refreshes fail or preserve prior records instead of silently committing bad data.
-- v0.12e keeps Form 144 proposed-sale notices out of confirmed-sale counts and filters.
-- v0.12e keeps conservative Form 144 seller extraction to avoid generic table-label captures.
+- v0.12f keeps those audit checks and adds an empty-dataset guard so all-zero refreshes fail or preserve prior records instead of silently committing bad data.
+- v0.12f keeps Form 144 proposed-sale notices out of confirmed-sale counts and filters.
+- v0.12f keeps conservative Form 144 seller extraction to avoid generic table-label captures.
 
 ## Upload guidance
 
@@ -79,7 +79,7 @@ After a green check, hard refresh the live site with Ctrl + Shift + R.
 - 13D/G records require source review for intent and ownership context.
 
 
-## v0.12e UI fix
+## v0.12f UI fix
 
 - Center Evidence Queue now displays the first 20 matching records instead of 10.
 - Top signal focus view is relabeled to Top 20 highest signal and uses the shared 20-record display limit.

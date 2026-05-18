@@ -204,23 +204,33 @@ def child_text(node: ET.Element, names: set[str]) -> str:
     return ""
 
 
-def normalize_13f_value(value_raw: str) -> tuple[Optional[int], Optional[int]]:
-    """Return (reported_thousands, market_value_usd).
+def normalize_13f_value(value_raw: str) -> tuple[Optional[int], Optional[int], str]:
+    """Return (reported_value, market_value_usd, basis).
 
-    SEC 13F information-table <value> fields are reported in thousands of dollars.
-    Capital Trace stores both the raw thousands value and the converted USD value
-    so the UI never displays a 1,000x inflated figure.
+    SEC 13F XML information-table <value> fields are normally reported in
+    thousands of dollars. Some parsed source variants or legacy records may
+    already expose a full-dollar value. Capital Trace must never display a
+    1,000x inflated holding, so this normalizer records the basis explicitly
+    and treats extremely large raw values as already-USD.
     """
     if not value_raw:
-        return None, None
+        return None, None, "missing"
     cleaned = str(value_raw).replace(",", "").strip()
     if not cleaned:
-        return None, None
+        return None, None, "missing"
     try:
-        reported_thousands = int(float(cleaned))
+        raw_value = int(float(cleaned))
     except ValueError:
-        return None, None
-    return reported_thousands, reported_thousands * 1000
+        return None, None, "unparsed"
+
+    # A raw 13F <value> above 2 billion would imply a >$2T single holding if
+    # interpreted as thousands. In our watchlist context that is almost always
+    # a full-dollar value coming from a parsed table/legacy source, not an SEC
+    # thousands field. Treat it as USD rather than multiplying again.
+    if raw_value >= 2_000_000_000:
+        return raw_value, raw_value, "parsed value treated as USD; not multiplied"
+
+    return raw_value, raw_value * 1000, "SEC 13F value field converted from thousands of dollars"
 
 
 def parse_13f_holdings(xml_text: str) -> List[Dict[str, Any]]:
@@ -258,7 +268,7 @@ def parse_13f_holdings(xml_text: str) -> List[Dict[str, Any]]:
         shares_raw = child_text(node, {"sshPrnamt"})
         put_call = child_text(node, {"putCall"})
         investment_discretion = child_text(node, {"investmentDiscretion"})
-        reported_value_thousands, market_value = normalize_13f_value(value_raw)
+        reported_value_raw, market_value, value_basis = normalize_13f_value(value_raw)
         try:
             shares = int(float(shares_raw.replace(",", ""))) if shares_raw else None
         except ValueError:
@@ -268,9 +278,10 @@ def parse_13f_holdings(xml_text: str) -> List[Dict[str, Any]]:
                 "name_of_issuer": name,
                 "title_of_class": title,
                 "cusip": cusip,
-                "reported_market_value_thousands": reported_value_thousands,
+                "reported_market_value_thousands": reported_value_raw if value_basis == "SEC 13F value field converted from thousands of dollars" else None,
                 "reported_market_value_usd": market_value,
                 "market_value": market_value,
+                "market_value_unit_basis": value_basis,
                 "shares": shares,
                 "put_call": put_call,
                 "investment_discretion": investment_discretion,
@@ -415,7 +426,7 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
                     "market_value": market_value,
                     "reported_market_value_thousands": holding.get("reported_market_value_thousands"),
                     "reported_market_value_usd": holding.get("reported_market_value_usd"),
-                    "market_value_unit_basis": "SEC 13F value field converted from thousands of dollars",
+                    "market_value_unit_basis": holding.get("market_value_unit_basis") or "SEC 13F value field converted from thousands of dollars",
                     "cusip": holding.get("cusip"),
                     "position_rank": rank,
                     "position_weight": position_weight,

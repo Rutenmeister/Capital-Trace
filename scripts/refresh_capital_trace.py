@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.12e master refresh.
+Capital Trace v0.12f master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -8,7 +8,7 @@ Universal SEC filing engine + trust layer:
 - writes diagnostics so the UI can say what was checked, found, or failed
 - commits one combined data/capital_trace.json payload
 
-Supported watchlist lanes in v0.12e:
+Supported watchlist lanes in v0.12f:
 - Form 4 / 4/A insider transactions
 - SC 13D, SC 13D/A, SC 13G, SC 13G/A beneficial ownership records
 - 13F-HR / 13F-HR/A institutional holdings records
@@ -42,7 +42,7 @@ from extraction_utils import postprocess_records, extraction_summary
 
 import os
 
-MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "650"))
+MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "10000"))
 SUPPORTED_FORMS = ["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "13F-HR", "13F-HR/A", "144", "144/A"]
 
 
@@ -95,6 +95,82 @@ def dedupe(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+def record_sort_key(record: Dict[str, Any]) -> Tuple[int, str]:
+    return (int(record.get("score") or 0), str(record.get("filed_date") or ""))
+
+
+def signal_safe_cap(records: List[Dict[str, Any]], max_records: int) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Cap output only after scoring, and never silently drop vital records.
+
+    The cap is a storage/browser-safety guard, not a signal filter. Always keep
+    Research Now records, A-tier records, 13D/G ownership events, and the newest
+    records from every lane before trimming lower-signal context records.
+    """
+    total = len(records)
+    if max_records <= 0 or total <= max_records:
+        return records, {"enabled": False, "max_records": max_records, "total_before_cap": total, "total_after_cap": total, "capped": False, "trimmed": 0}
+
+    def is_force_keep(record: Dict[str, Any]) -> bool:
+        grade = str(record.get("evidence_grade") or "").upper()
+        action = str(record.get("actionability") or "").lower()
+        text = " ".join(str(record.get(k, "")) for k in ["source_group", "source_type", "filing_type", "record_type", "event_type"]).lower()
+        score = int(record.get("score") or 0)
+        value = record.get("transaction_value") or record.get("market_value") or 0
+        try:
+            value = float(value)
+        except Exception:
+            value = 0
+        return (
+            "research now" in action
+            or grade in {"A", "A-"}
+            or score >= 85
+            or "13d" in text
+            or "13g" in text
+            or value >= 1_000_000_000
+        )
+
+    sorted_records = sorted(records, key=record_sort_key, reverse=True)
+    selected: List[Dict[str, Any]] = []
+    selected_ids: set[str] = set()
+
+    def add(record: Dict[str, Any]) -> None:
+        rid = str(record.get("record_id") or record.get("id") or id(record))
+        if rid not in selected_ids:
+            selected.append(record)
+            selected_ids.add(rid)
+
+    for record in sorted_records:
+        if is_force_keep(record):
+            add(record)
+
+    # Preserve recency/coverage by lane before filling the rest by score.
+    by_lane: Dict[str, List[Dict[str, Any]]] = {}
+    for record in sorted_records:
+        lane = str(record.get("source_group") or record.get("source_type") or "Unknown")
+        by_lane.setdefault(lane, []).append(record)
+    per_lane_keep = max(20, min(150, max_records // max(1, len(by_lane)) // 2))
+    for lane_records in by_lane.values():
+        newest = sorted(lane_records, key=lambda r: str(r.get("filed_date") or ""), reverse=True)[:per_lane_keep]
+        for record in newest:
+            if len(selected) < max_records:
+                add(record)
+
+    for record in sorted_records:
+        if len(selected) >= max_records:
+            break
+        add(record)
+
+    return selected[:max_records], {
+        "enabled": True,
+        "max_records": max_records,
+        "total_before_cap": total,
+        "total_after_cap": min(len(selected), max_records),
+        "capped": True,
+        "trimmed": max(0, total - min(len(selected), max_records)),
+        "rule": "signal-safe: force-keeps Research Now, A-tier, high-score, 13D/G, high-value, and newest-per-lane records before trimming lower-signal context",
+    }
+
+
 def load_previous_payload() -> Dict[str, Any] | None:
     if not OUTPUT_JSON.exists():
         return None
@@ -144,7 +220,8 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     previous = load_previous_payload()
     prev_count = previous_record_count(previous)
     records = postprocess_records(dedupe(records))
-    records = sorted(records, key=lambda r: (int(r.get("score") or 0), str(r.get("filed_date") or "")), reverse=True)[:MAX_OUTPUT_RECORDS]
+    records = sorted(records, key=record_sort_key, reverse=True)
+    records, output_cap = signal_safe_cap(records, MAX_OUTPUT_RECORDS)
 
     # Integrity guard: never replace a previously useful live file with an empty or near-empty refresh.
     # Important: if we preserve old records, we also preserve the diagnostics that describe
@@ -169,7 +246,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     counts_by_form = filing_type_counts(records)
 
     payload = {
-        "schema_version": "0.12e",
+        "schema_version": "0.12f",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -179,7 +256,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.12e",
+            "schema_version": "0.12f",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
             "refresh_frequency": "hourly",
@@ -200,10 +277,12 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "preserved_previous_records": preserved_previous_records,
             "refresh_guard": guard,
             "latest_refresh_diagnostics": latest_refresh_diagnostics,
-            "methodology_version": "0.12e-refresh-stability-dataset-truth-model",
+            "methodology_version": "0.12f-signal-safe-capping-and-13f-unit-repair",
             "extraction_summary": extraction_summary(records),
+            "output_cap": output_cap,
         },
         "latest_refresh_diagnostics": latest_refresh_diagnostics,
+        "output_cap": output_cap,
         "records": records,
     }
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -241,7 +320,7 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.12e stability refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.12f stability refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])
