@@ -1,7 +1,7 @@
 {
-  "schema_version": "0.12j",
+  "schema_version": "0.12k",
   "data_mode": "sec-watchlist-multilane",
-  "generated_at": "2026-05-18T19:36:40Z",
+  "generated_at": "2026-05-18T19:48:06Z",
   "lookback_days": 180,
   "records_count": 650,
   "lane_count": 4,
@@ -85,13 +85,13 @@
   },
   "metadata": {
     "product": "Capital Trace",
-    "schema_version": "0.12j",
+    "schema_version": "0.12k",
     "data_mode": "sec-watchlist-multilane",
     "source_pipeline": "sec-universal-watchlist-template",
     "refresh_frequency": "tiered",
-    "last_refreshed": "2026-05-18T19:36:40Z",
-    "last_data_update": "2026-05-18T19:36:40Z",
-    "last_sec_check": "2026-05-18T19:36:40Z",
+    "last_refreshed": "2026-05-18T19:48:06Z",
+    "last_data_update": "2026-05-18T19:48:06Z",
+    "last_sec_check": "2026-05-18T19:48:06Z",
     "next_scheduled_check": "2026-05-18T20:00:00Z",
     "source_groups": [
       "SEC Insider Ownership",
@@ -146,6 +146,7 @@
       "new_record_count": 0,
       "previous_record_count": 650,
       "lane_record_counts": {
+        "index_discovery": 0,
         "insider_form4": 0,
         "ownership_13d_13g": 0,
         "institutional_13f": 0,
@@ -158,6 +159,27 @@
       "preservation_reason": "new refresh returned zero/near-zero records or all lanes zero; preserved previous live records"
     },
     "latest_refresh_diagnostics": {
+      "index_discovery": {
+        "status": "disabled",
+        "lane": "index_discovery",
+        "forms_checked": [
+          "4",
+          "4/A",
+          "SC 13D",
+          "SC 13D/A",
+          "SC 13G",
+          "SC 13G/A",
+          "144",
+          "144/A"
+        ],
+        "companies_checked": 0,
+        "lookback_days": 180,
+        "filings_seen": 0,
+        "filings_matched": 0,
+        "records_added": 0,
+        "errors": [],
+        "note": "Lane not run."
+      },
       "insider_form4": {
         "status": "checked_no_records",
         "lane": "insider",
@@ -232,7 +254,7 @@
     "latest_refresh_record_count": 0,
     "loaded_dataset_record_count": 650,
     "data_source_truth": "preserved_previous_dataset",
-    "methodology_version": "0.12j-tiered-sec-scanner-rate-limit-guard",
+    "methodology_version": "0.12k-index-discovery-refresh-proof",
     "extraction_summary": {
       "complete": 231,
       "partial": 419,
@@ -249,6 +271,27 @@
     }
   },
   "latest_refresh_diagnostics": {
+    "index_discovery": {
+      "status": "disabled",
+      "lane": "index_discovery",
+      "forms_checked": [
+        "4",
+        "4/A",
+        "SC 13D",
+        "SC 13D/A",
+        "SC 13G",
+        "SC 13G/A",
+        "144",
+        "144/A"
+      ],
+      "companies_checked": 0,
+      "lookback_days": 180,
+      "filings_seen": 0,
+      "filings_matched": 0,
+      "records_added": 0,
+      "errors": [],
+      "note": "Lane not run."
+    },
     "insider_form4": {
       "status": "checked_no_records",
       "lane": "insider",
