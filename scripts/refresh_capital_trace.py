@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.12j master refresh.
+Capital Trace v0.12k master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -40,6 +40,10 @@ from refresh_sec_ownership import collect_ownership_records
 from refresh_sec_13f import collect_13f_records
 from refresh_sec_144 import collect_form144_records
 from extraction_utils import postprocess_records, extraction_summary
+try:
+    from refresh_sec_index import collect_index_discovery_records
+except Exception:  # keeps old installs from crashing before upload is complete
+    collect_index_discovery_records = None
 
 import os
 
@@ -51,6 +55,8 @@ RUN_OWNERSHIP = os.environ.get("CAPITAL_TRACE_RUN_OWNERSHIP", "true").strip().lo
 RUN_13F = os.environ.get("CAPITAL_TRACE_RUN_13F", "true").strip().lower() in {"1", "true", "yes"}
 RUN_144 = os.environ.get("CAPITAL_TRACE_RUN_144", "true").strip().lower() in {"1", "true", "yes"}
 SUPPORTED_FORMS = ["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "13F-HR", "13F-HR/A", "144", "144/A"]
+USE_INDEX_SCAN = os.environ.get("CAPITAL_TRACE_USE_INDEX_SCAN", "false").strip().lower() in {"1", "true", "yes"}
+INDEX_SCAN_REPLACES_ISSUER_LANES = os.environ.get("CAPITAL_TRACE_INDEX_SCAN_REPLACES_ISSUER_LANES", "auto").strip().lower()
 
 
 def base_diag(*, lane: str, forms: List[str], lookback_days: int = LOOKBACK_DAYS) -> Dict[str, Any]:
@@ -279,7 +285,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     latest_refresh_record_count = sum(int((diag or {}).get("records_added") or 0) for diag in latest_refresh_diagnostics.values())
 
     payload = {
-        "schema_version": "0.12j",
+        "schema_version": "0.12k",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -289,7 +295,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.12j",
+            "schema_version": "0.12k",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
             "refresh_frequency": "tiered",
@@ -317,7 +323,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "latest_refresh_record_count": latest_refresh_record_count,
             "loaded_dataset_record_count": len(records),
             "data_source_truth": "preserved_previous_dataset" if preserved_previous_records else "fresh_refresh_dataset",
-            "methodology_version": "0.12j-tiered-sec-scanner-rate-limit-guard",
+            "methodology_version": "0.12k-index-discovery-refresh-proof",
             "extraction_summary": extraction_summary(records),
             "output_cap": output_cap,
         },
@@ -362,29 +368,43 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.12j tiered refresh: scope={REFRESH_SCOPE}; {len(companies)} issuers in this run; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.12k refresh: scope={REFRESH_SCOPE}; index_scan={USE_INDEX_SCAN}; {len(companies)} issuers in this run; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])
     institutional_diag = base_diag(lane="institutional", forms=["13F-HR", "13F-HR/A"])
     proposed_sales_diag = base_diag(lane="proposed_sales", forms=["144", "144/A"])
+    index_diag = base_diag(lane="index_discovery", forms=["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "144", "144/A"])
 
     form4_records = []
     ownership_records = []
     institutional_records = []
     proposed_sales_records = []
+    index_records = []
 
-    if RUN_FORM4:
+    replaces = INDEX_SCAN_REPLACES_ISSUER_LANES
+    if replaces == "auto":
+        replaces = "true" if USE_INDEX_SCAN and REFRESH_SCOPE in {"broad", "sp500", "daily"} else "false"
+    index_replaces_issuer_lanes = replaces in {"1", "true", "yes"}
+
+    if USE_INDEX_SCAN and collect_index_discovery_records is not None:
+        index_records, index_diag = run_lane("SEC Daily Index Discovery", collect_index_discovery_records, companies, index_diag)
+    elif USE_INDEX_SCAN:
+        index_diag["status"] = "failed"
+        index_diag["errors"].append("refresh_sec_index.py was not available")
+        index_diag["note"] = "Index discovery was requested but the script was missing."
+
+    if RUN_FORM4 and not index_replaces_issuer_lanes:
         form4_records, form4_diag = run_lane("SEC Form 4", collect_form4_records, companies, form4_diag)
     else:
         form4_diag["status"] = "disabled"
-        form4_diag["note"] = "Lane disabled by CAPITAL_TRACE_RUN_FORM4."
+        form4_diag["note"] = "Lane disabled by workflow or replaced by SEC daily-index discovery."
 
-    if RUN_OWNERSHIP:
+    if RUN_OWNERSHIP and not index_replaces_issuer_lanes:
         ownership_records, ownership_diag = run_lane("SEC 13D/G Ownership", collect_ownership_records, companies, ownership_diag)
     else:
         ownership_diag["status"] = "disabled"
-        ownership_diag["note"] = "Lane disabled by CAPITAL_TRACE_RUN_OWNERSHIP."
+        ownership_diag["note"] = "Lane disabled by workflow or replaced by SEC daily-index discovery."
 
     if RUN_13F:
         institutional_records, institutional_diag = run_lane("SEC 13F Institutional Holdings", collect_13f_records, companies, institutional_diag)
@@ -392,19 +412,20 @@ def main() -> int:
         institutional_diag["status"] = "disabled"
         institutional_diag["note"] = "Lane disabled by CAPITAL_TRACE_RUN_13F."
 
-    if RUN_144:
+    if RUN_144 and not index_replaces_issuer_lanes:
         proposed_sales_records, proposed_sales_diag = run_lane("SEC Form 144 Proposed Sales", collect_form144_records, companies, proposed_sales_diag)
     else:
         proposed_sales_diag["status"] = "disabled"
-        proposed_sales_diag["note"] = "Lane disabled by CAPITAL_TRACE_RUN_144."
+        proposed_sales_diag["note"] = "Lane disabled by workflow or replaced by SEC daily-index discovery."
 
     diagnostics = {
+        "index_discovery": index_diag,
         "insider_form4": form4_diag,
         "ownership_13d_13g": ownership_diag,
         "institutional_13f": institutional_diag,
         "proposed_sales_144": proposed_sales_diag,
     }
-    write_outputs(form4_records + ownership_records + institutional_records + proposed_sales_records, companies, diagnostics)
+    write_outputs(index_records + form4_records + ownership_records + institutional_records + proposed_sales_records, companies, diagnostics)
     return 0
 
 

@@ -899,12 +899,26 @@ function renderTraceBrief() {
     .join(' · ') || 'No filing counts available';
   const sourceTruth = state.metadata.data_source_truth || 'fresh_refresh_dataset';
   const latestCount = Number(state.metadata.latest_refresh_record_count ?? state.records.length);
-  const truthLabel = sourceTruth === 'preserved_previous_dataset'
-    ? `Loaded dataset was preserved from a prior good refresh; latest refresh produced ${latestCount} records.`
-    : `Loaded dataset comes from the latest successful refresh (${latestCount} records).`;
+  const freshBeforeMerge = Number(state.metadata.fresh_record_count_before_merge ?? latestCount);
+  const mergedPrevious = Boolean(state.metadata.merged_previous_records);
+  const preservedPrevious = Boolean(state.metadata.preserved_previous_records || sourceTruth === 'preserved_previous_dataset');
+  let truthLabel;
+  if (preservedPrevious) {
+    truthLabel = `Loaded dataset was preserved from a prior good dataset; latest refresh produced ${latestCount} records and did not replace loaded records.`;
+  } else if (mergedPrevious) {
+    truthLabel = `Loaded dataset includes ${freshBeforeMerge} fresh records merged with previous records; latest refresh added/confirmed ${latestCount} lane records.`;
+  } else if (latestCount === 0 && state.records.length > 0) {
+    truthLabel = `Loaded dataset contains ${state.records.length} records, but the latest refresh reported 0 new lane records. Review refresh diagnostics before treating it as fresh.`;
+  } else {
+    truthLabel = `Loaded dataset comes from the latest refresh (${latestCount} latest lane records; ${state.records.length} loaded records).`;
+  }
+  const proof = state.metadata.sec_request_stats
+    ? `SEC requests: ${Number(state.metadata.sec_request_stats.requests_attempted || 0)} attempted · ${Number(state.metadata.sec_request_stats.http_403_count || 0)} HTTP 403 · circuit ${state.metadata.sec_request_stats.circuit_open ? 'open' : 'closed'}`
+    : '';
   els.traceBrief.innerHTML = `<p><strong>${state.records.length}</strong> records loaded across <strong>${Math.max((state.metadata.coverage_lanes || []).length, EXPECTED_LANES.length)}</strong> supported SEC lanes.</p>
     <p>Lookback: <strong>${escapeHtml(state.metadata.lookback_days || 'unknown')}</strong> days · Data mode: <strong>${escapeHtml(state.metadata.data_mode || '-')}</strong></p>
     <p><strong>Data source truth:</strong> ${escapeHtml(truthLabel)}</p>
+    ${proof ? `<p><strong>Refresh proof:</strong> ${escapeHtml(proof)}</p>` : ''}
     <p>${formText}</p>
     <p class="trace-note">Current coverage is SEC watchlist only, not the full SEC universe.</p>`;
 }
