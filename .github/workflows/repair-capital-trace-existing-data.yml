@@ -1,0 +1,45 @@
+name: Repair Capital Trace Existing Data
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: capital-trace-data-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Repair existing Capital Trace data
+        env:
+          CAPITAL_TRACE_REPAIR_EXISTING_DATA: "true"
+          CAPITAL_TRACE_MAX_OUTPUT_RECORDS: "5000"
+          CAPITAL_TRACE_USER_AGENT: "Edgefield Systems LLC rutenmeister@users.noreply.github.com"
+        run: python scripts/repair_existing_capital_trace_data.py
+
+      - name: Audit repaired data integrity
+        env:
+          CAPITAL_TRACE_FAIL_ON_SEC_BLOCK: "false"
+          CAPITAL_TRACE_ALLOW_PRESERVED_DATA: "true"
+        run: python scripts/audit_data_integrity.py
+
+      - name: Commit repaired data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Repair Capital Trace preserved dataset"
+          file_pattern: |
+            data/capital_trace.json
+            data/capital_trace_data.js
