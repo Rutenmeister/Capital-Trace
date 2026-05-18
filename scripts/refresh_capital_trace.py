@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.12k master refresh.
+Capital Trace v0.13 master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -35,6 +35,7 @@ from refresh_sec_form4 import (
     next_hour_iso,
     collect_form4_records,
     get_sec_request_stats,
+    USER_AGENT,
 )
 from refresh_sec_ownership import collect_ownership_records
 from refresh_sec_13f import collect_13f_records
@@ -285,7 +286,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     latest_refresh_record_count = sum(int((diag or {}).get("records_added") or 0) for diag in latest_refresh_diagnostics.values())
 
     payload = {
-        "schema_version": "0.12k",
+        "schema_version": "0.13",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -295,7 +296,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.12k",
+            "schema_version": "0.13",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
             "refresh_frequency": "tiered",
@@ -323,7 +324,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "latest_refresh_record_count": latest_refresh_record_count,
             "loaded_dataset_record_count": len(records),
             "data_source_truth": "preserved_previous_dataset" if preserved_previous_records else "fresh_refresh_dataset",
-            "methodology_version": "0.12k-index-discovery-refresh-proof",
+            "methodology_version": "0.13-stable-recovery",
             "extraction_summary": extraction_summary(records),
             "output_cap": output_cap,
         },
@@ -368,7 +369,8 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.12k refresh: scope={REFRESH_SCOPE}; index_scan={USE_INDEX_SCAN}; {len(companies)} issuers in this run; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.13 refresh: scope={REFRESH_SCOPE}; index_scan={USE_INDEX_SCAN}; {len(companies)} issuers in this run; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] SEC User-Agent: {USER_AGENT}")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])

@@ -898,17 +898,28 @@ function renderTraceBrief() {
     .map(([form, count]) => `${escapeHtml(form)}: ${Number(count)}`)
     .join(' · ') || 'No filing counts available';
   const sourceTruth = state.metadata.data_source_truth || 'fresh_refresh_dataset';
-  const latestCount = Number(state.metadata.latest_refresh_record_count ?? state.records.length);
+  const latestDiagnostics = state.metadata.latest_refresh_diagnostics || state.raw.latest_refresh_diagnostics || {};
+  const latestDiagnosticCount = Object.values(latestDiagnostics || {}).reduce((sum, diag) => {
+    if (!diag || typeof diag !== 'object') return sum;
+    return sum + Number(diag.records_added || 0);
+  }, 0);
+  const latestCount = Number.isFinite(latestDiagnosticCount) && Object.keys(latestDiagnostics || {}).length
+    ? latestDiagnosticCount
+    : Number(state.metadata.latest_refresh_record_count ?? state.records.length);
   const freshBeforeMerge = Number(state.metadata.fresh_record_count_before_merge ?? latestCount);
   const mergedPrevious = Boolean(state.metadata.merged_previous_records);
   const preservedPrevious = Boolean(state.metadata.preserved_previous_records || sourceTruth === 'preserved_previous_dataset');
   let truthLabel;
-  if (preservedPrevious) {
+  const secStats = state.metadata.sec_request_stats || {};
+  const secBlocked = Boolean(secStats.circuit_open || Number(secStats.http_403_count || 0) > 0);
+  if (secBlocked) {
+    truthLabel = `Fresh SEC scan was blocked or denied (${Number(secStats.http_403_count || 0)} HTTP 403). Loaded records are preserved prior data, not proof of a successful fresh scan.`;
+  } else if (preservedPrevious) {
     truthLabel = `Loaded dataset was preserved from a prior good dataset; latest refresh produced ${latestCount} records and did not replace loaded records.`;
+  } else if (latestCount === 0 && state.records.length > 0) {
+    truthLabel = `Loaded dataset contains ${state.records.length} prior records, but latest-refresh diagnostics show 0 new lane records. Treat this as preserved data until scanner diagnostics prove fresh access.`;
   } else if (mergedPrevious) {
     truthLabel = `Loaded dataset includes ${freshBeforeMerge} fresh records merged with previous records; latest refresh added/confirmed ${latestCount} lane records.`;
-  } else if (latestCount === 0 && state.records.length > 0) {
-    truthLabel = `Loaded dataset contains ${state.records.length} records, but the latest refresh reported 0 new lane records. Review refresh diagnostics before treating it as fresh.`;
   } else {
     truthLabel = `Loaded dataset comes from the latest refresh (${latestCount} latest lane records; ${state.records.length} loaded records).`;
   }
@@ -920,7 +931,7 @@ function renderTraceBrief() {
     <p><strong>Data source truth:</strong> ${escapeHtml(truthLabel)}</p>
     ${proof ? `<p><strong>Refresh proof:</strong> ${escapeHtml(proof)}</p>` : ''}
     <p>${formText}</p>
-    <p class="trace-note">Current coverage is SEC watchlist only, not the full SEC universe.</p>`;
+    <p class="trace-note">Current coverage is preserved/repaired dataset mode. Direct GitHub SEC refresh is disabled in v0.13 until a reliable source provider is connected.</p>`;
 }
 
 function renderAll() {

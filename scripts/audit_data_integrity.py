@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capital Trace data integrity audit v0.12l.
+"""Capital Trace data integrity audit v0.13.
 
 Run from the repository root after a refresh:
     python scripts/audit_data_integrity.py

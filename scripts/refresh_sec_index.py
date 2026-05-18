@@ -13,7 +13,7 @@ import re
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from refresh_sec_form4 import Company, now_utc, parse_date, sec_get
+from refresh_sec_form4 import Company, now_utc, parse_date, sec_get, get_sec_request_stats
 
 SEC_ARCHIVES_ROOT = "https://www.sec.gov/Archives"
 INDEX_LOOKBACK_DAYS = int(os.environ.get("CAPITAL_TRACE_INDEX_LOOKBACK_DAYS", "14"))
@@ -25,11 +25,41 @@ def quarter_for_month(month: int) -> int:
     return ((month - 1) // 3) + 1
 
 
-def master_index_url(dt) -> str:
+def master_index_url(dt, *, gz: bool = False) -> str:
     qtr = quarter_for_month(dt.month)
     ymd = dt.strftime("%Y%m%d")
-    return f"{SEC_ARCHIVES_ROOT}/edgar/daily-index/{dt.year}/QTR{qtr}/master.{ymd}.idx"
+    suffix = ".idx.gz" if gz else ".idx"
+    return f"{SEC_ARCHIVES_ROOT}/edgar/daily-index/{dt.year}/QTR{qtr}/master.{ymd}{suffix}"
 
+
+
+
+def full_index_url(dt, *, gz: bool = False) -> str:
+    qtr = quarter_for_month(dt.month)
+    suffix = ".idx.gz" if gz else ".idx"
+    return f"{SEC_ARCHIVES_ROOT}/edgar/full-index/{dt.year}/QTR{qtr}/master{suffix}"
+
+
+def load_index_text_for_day(dt) -> tuple[str | None, str, bool]:
+    """Try SEC index sources from lowest-request to daily fallback.
+
+    Returns (text, source_url, is_full_index). The quarterly full-index is a
+    single request that usually includes filings through the previous business
+    day, so it is the safest first choice. Daily index is only a fallback.
+    """
+    candidates = []
+    if os.environ.get("CAPITAL_TRACE_USE_FULL_INDEX", "true").strip().lower() in {"1", "true", "yes"}:
+        candidates.append((full_index_url(dt), True))
+        candidates.append((full_index_url(dt, gz=True), True))
+    if os.environ.get("CAPITAL_TRACE_DISABLE_DAILY_INDEX", "false").strip().lower() not in {"1", "true", "yes"}:
+        candidates.append((master_index_url(dt), False))
+        candidates.append((master_index_url(dt, gz=True), False))
+
+    for url, is_full in candidates:
+        text = sec_get(url, as_json=False)
+        if text and "CIK|Company Name|Form Type|Date Filed|Filename" in text:
+            return text, url, is_full
+    return None, "", False
 
 def accession_from_filename(filename: str) -> str:
     # filename: edgar/data/320193/0000320193-26-000028.txt
@@ -117,18 +147,19 @@ def collect_index_discovery_records(companies: List[Company], diagnostics: Optio
         diagnostics.setdefault("errors", [])
         diagnostics["note"] = "SEC daily-index discovery scan. Low-request broad coverage; detailed figures require source parser follow-up."
 
-    days_checked = 0
+    # Prefer the quarterly full-index first. It is one request and can cover
+    # the current quarter through the previous business day. If it loads, we do
+    # not loop over daily files. If it fails, we fall back to a small daily scan.
     current = now_utc().date()
-    while days_checked < INDEX_MAX_DAYS:
-        dt = current - timedelta(days=days_checked)
-        days_checked += 1
-        # SEC daily index exists only for business/filing days; missing weekend files are normal.
-        index_days_attempted += 1
-        url = master_index_url(dt)
-        text = sec_get(url, as_json=False)
-        if not text or "CIK|Company Name|Form Type|Date Filed|Filename" not in text:
-            continue
-        index_days_loaded += 1
+    loaded_full_index = False
+    loaded_urls: List[str] = []
+
+    text, source_url, is_full_index = load_index_text_for_day(current)
+    if text:
+        index_days_attempted = 1
+        index_days_loaded = 1
+        loaded_full_index = is_full_index
+        loaded_urls.append(source_url)
         rows = parse_master_index(text)
         forms_seen += len(rows)
         for row in rows:
@@ -180,7 +211,7 @@ def collect_index_discovery_records(companies: List[Company], diagnostics: Optio
                 "actionability": action,
                 "watchlist_match": True,
                 "rank_reasons": [
-                    "Matched SEC daily master index for a Capital Trace issuer",
+                    "Matched SEC master index for a Capital Trace issuer",
                     "Low-request discovery scan found a supported filing form",
                     "Detailed transaction figures require parser/source-document follow-up",
                 ],
@@ -189,14 +220,14 @@ def collect_index_discovery_records(companies: List[Company], diagnostics: Optio
                     "Future price movement",
                     "A complete investment thesis",
                 ],
-                "caveat": "This is an SEC daily-index discovery record. It proves a matching filing appeared in the SEC index, but it may not contain all parsed transaction figures yet.",
+                "caveat": "This is an SEC index discovery record. It proves a matching filing appeared in the SEC index, but it may not contain all parsed transaction figures yet.",
                 "source_url": row.get("source_url") or "",
                 "vital_point": f"SEC index match: {company.ticker} had a {form} filing accepted on {row.get('filed_date') or 'unknown date'}.",
                 "key_figures": {
                     "Filing form": form,
                     "Filed date": row.get("filed_date") or "",
                     "Accession": accession,
-                    "Discovery source": "SEC daily master index",
+                    "Discovery source": "SEC quarterly full index" if is_full_index else "SEC daily master index",
                 },
                 "person_entity": {
                     "Filer / entity": row.get("company") or company.name or company.ticker,
@@ -208,7 +239,7 @@ def collect_index_discovery_records(companies: List[Company], diagnostics: Optio
                     "Source lane": source_group,
                     "Filed date": row.get("filed_date") or "",
                     "Accession": accession,
-                    "Discovery method": "SEC daily master index",
+                    "Discovery method": "SEC quarterly full index" if is_full_index else "SEC daily master index",
                 },
                 "extraction_quality": {
                     "status": "partial",
@@ -217,13 +248,19 @@ def collect_index_discovery_records(companies: List[Company], diagnostics: Optio
                     "notes": ["Index discovery record; source parser can enrich later."],
                 },
             })
+    else:
+        # No index source loaded. Record the single failed attempt.
+        index_days_attempted = 1
 
     if diagnostics is not None:
+        diagnostics["sec_request_stats"] = get_sec_request_stats()
         diagnostics["filings_seen"] = forms_seen
         diagnostics["filings_matched"] = forms_matched
         diagnostics["records_added"] = len(records)
         diagnostics["index_days_attempted"] = index_days_attempted
         diagnostics["index_days_loaded"] = index_days_loaded
+        diagnostics["loaded_full_index"] = loaded_full_index
+        diagnostics["loaded_index_urls"] = loaded_urls
         if records:
             diagnostics["status"] = "ok"
             diagnostics["note"] = f"SEC daily-index scan found {len(records)} supported filing matches."
@@ -232,6 +269,13 @@ def collect_index_discovery_records(companies: List[Company], diagnostics: Optio
             diagnostics["note"] = "SEC daily-index files loaded, but no supported filing matches were found for this watchlist/window."
         else:
             diagnostics["status"] = "failed"
-            diagnostics.setdefault("errors", []).append("No SEC daily-index files loaded for the requested window.")
-            diagnostics["note"] = "SEC daily-index scan could not load index files."
+            stats = get_sec_request_stats()
+            if stats.get("http_403_count"):
+                diagnostics.setdefault("errors", []).append(
+                    f"SEC access denied while loading daily-index files: {stats.get('http_403_count')} HTTP 403 responses; circuit_open={stats.get('circuit_open')}"
+                )
+                diagnostics["note"] = "SEC daily-index scan could not load index files because SEC denied the requests. Previous data should be preserved; this is source access failure, not no-records."
+            else:
+                diagnostics.setdefault("errors", []).append("No SEC daily-index files loaded for the requested window.")
+                diagnostics["note"] = "SEC daily-index scan could not load index files."
     return records

@@ -78,10 +78,22 @@ def normalize_13f_market_value(record: Dict[str, Any]) -> tuple[Any, List[str]]:
         value = num(record.get(key))
         if value is None or value <= 0:
             continue
-        while value >= severe_single_holding:
-            value = value / 1000
-            notes.append(f"13F {key} looked double-scaled; normalized down by 1,000.")
+
+        # Preserve the literal parsed USD candidate, but also add downscaled
+        # candidates for legacy records that were accidentally inflated 1,000x.
+        # This catches the common failure where a 13F table value that should be
+        # $914M was displayed as $914B. The implied-price selector below chooses
+        # the plausible candidate instead of the largest raw number.
         candidates.append((value, f"{key} used as USD"))
+
+        scaled = value
+        for factor in [1000, 1_000_000]:
+            scaled = value / factor
+            if scaled > 0:
+                candidates.append((scaled, f"{key} normalized down by {factor:,} after implied-price sanity check"))
+
+        if value >= severe_single_holding:
+            notes.append(f"13F {key} looked severely high; downscaled candidates added for sanity selection.")
 
     if not candidates:
         return None, notes
@@ -123,7 +135,7 @@ def repair_13f_record(record: Dict[str, Any]) -> Dict[str, Any]:
         r["transaction_value"] = usd_int
         # Keep a clean derived thousands field for transparency.
         r["reported_market_value_thousands"] = int(round(usd_int / 1000))
-        r["market_value_unit_basis"] = "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source"
+        r["market_value_unit_basis"] = "13F value normalized with global implied-price sanity check; prevents legacy 1,000x unit errors"
         r["position_value_label"] = fmt_money(usd_int)
         r["value_basis_label"] = "13F value normalized by implied-price sanity check"
 

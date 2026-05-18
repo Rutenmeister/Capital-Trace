@@ -23,6 +23,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
+import gzip
+import zlib
 import html
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -38,7 +41,8 @@ SP500_WATCHLIST_PATH = CONFIG_DIR / "sp500_watchlist.json"
 OUTPUT_JSON = DATA_DIR / "capital_trace.json"
 OUTPUT_JS = DATA_DIR / "capital_trace_data.js"
 
-USER_AGENT = os.environ.get("CAPITAL_TRACE_USER_AGENT", "CapitalTrace/0.6 contact@example.com")
+USER_AGENT = os.environ.get("CAPITAL_TRACE_USER_AGENT", "Edgefield Systems LLC rutenmeister@users.noreply.github.com")
+CONTACT_EMAIL = os.environ.get("CAPITAL_TRACE_CONTACT_EMAIL", "rutenmeister@users.noreply.github.com")
 REQUEST_DELAY_SECONDS = float(os.environ.get("CAPITAL_TRACE_SEC_REQUEST_DELAY_SECONDS", os.environ.get("CAPITAL_TRACE_REQUEST_DELAY", "0.25")))
 MAX_SEC_403_ERRORS = int(os.environ.get("CAPITAL_TRACE_SEC_MAX_403_ERRORS", "20"))
 MAX_ISSUERS_PER_RUN = int(os.environ.get("CAPITAL_TRACE_MAX_ISSUERS_PER_RUN", "0"))
@@ -121,16 +125,33 @@ def sec_get(url: str, *, as_json: bool = False) -> Any:
     cache_key = f"json:{url}" if as_json else f"text:{url}"
     if cache_key in SEC_GET_CACHE:
         return SEC_GET_CACHE[cache_key]
+    # SEC fair-access guidance expects a descriptive User-Agent, contact,
+    # gzip/deflate support, and efficient requests. Build browser-neutral but
+    # transparent headers for every SEC request.
+    parsed_url = urllib.parse.urlparse(url)
     headers = {
         "User-Agent": USER_AGENT,
-        "Accept": "application/json,text/xml,application/xml,text/html,*/*",
+        "From": CONTACT_EMAIL,
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "application/json,text/plain,text/xml,application/xml,text/html,*/*",
+        "Connection": "close",
     }
+    if parsed_url.netloc:
+        headers["Host"] = parsed_url.netloc
     req = urllib.request.Request(url, headers=headers)
     SEC_REQUEST_COUNT += 1
     time.sleep(REQUEST_DELAY_SECONDS)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=45) as resp:
             raw = resp.read()
+            encoding = (resp.headers.get("Content-Encoding") or "").lower()
+            if "gzip" in encoding:
+                raw = gzip.decompress(raw)
+            elif "deflate" in encoding:
+                try:
+                    raw = zlib.decompress(raw)
+                except zlib.error:
+                    raw = zlib.decompress(raw, -zlib.MAX_WBITS)
             text = raw.decode("utf-8", errors="replace")
             if as_json:
                 parsed = json.loads(text)
