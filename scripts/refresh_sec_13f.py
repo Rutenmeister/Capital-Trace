@@ -41,6 +41,7 @@ from refresh_sec_form4 import (
     parse_date,
     recent_filings_by_forms,
     sec_get,
+    sec_circuit_open,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -373,6 +374,10 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
         diagnostics["note"] = "13F lane is manager-watchlist based; it does not scan all 13F managers."
 
     for manager in managers:
+        if sec_circuit_open():
+            if diagnostics is not None:
+                diagnostics.setdefault("errors", []).append("SEC circuit breaker opened; 13F lane stopped early to avoid further 403s.")
+            break
         print(f"[INFO] {manager.name} 13F lane")
         if diagnostics is not None:
             diagnostics["managers_checked"] += 1

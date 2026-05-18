@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.12i master refresh.
+Capital Trace v0.12j master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -34,6 +34,7 @@ from refresh_sec_form4 import (
     load_watchlist,
     next_hour_iso,
     collect_form4_records,
+    get_sec_request_stats,
 )
 from refresh_sec_ownership import collect_ownership_records
 from refresh_sec_13f import collect_13f_records
@@ -43,6 +44,12 @@ from extraction_utils import postprocess_records, extraction_summary
 import os
 
 MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "5000"))
+REFRESH_SCOPE = os.environ.get("CAPITAL_TRACE_REFRESH_SCOPE", "fast").strip().lower()
+MERGE_PREVIOUS_RECORDS = os.environ.get("CAPITAL_TRACE_MERGE_PREVIOUS_RECORDS", "auto").strip().lower()
+RUN_FORM4 = os.environ.get("CAPITAL_TRACE_RUN_FORM4", "true").strip().lower() in {"1", "true", "yes"}
+RUN_OWNERSHIP = os.environ.get("CAPITAL_TRACE_RUN_OWNERSHIP", "true").strip().lower() in {"1", "true", "yes"}
+RUN_13F = os.environ.get("CAPITAL_TRACE_RUN_13F", "true").strip().lower() in {"1", "true", "yes"}
+RUN_144 = os.environ.get("CAPITAL_TRACE_RUN_144", "true").strip().lower() in {"1", "true", "yes"}
 SUPPORTED_FORMS = ["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "13F-HR", "13F-HR/A", "144", "144/A"]
 
 
@@ -216,9 +223,24 @@ def refresh_guard_status(new_count: int, previous_count: int, diagnostics: Dict[
     }
 
 
+
+def should_merge_previous() -> bool:
+    if MERGE_PREVIOUS_RECORDS in {"1", "true", "yes"}:
+        return True
+    if MERGE_PREVIOUS_RECORDS in {"0", "false", "no"}:
+        return False
+    return REFRESH_SCOPE in {"broad", "sp500", "daily"}
+
 def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagnostics: Dict[str, Any]) -> None:
     previous = load_previous_payload()
     prev_count = previous_record_count(previous)
+    fresh_record_count_before_merge = len(records)
+    merged_previous_records = False
+    if should_merge_previous() and previous and isinstance(previous.get("records"), list) and previous.get("records"):
+        # Broad scans often run in rotating batches. Merge fresh batch records into
+        # the prior live dataset so a partial broad run does not erase coverage.
+        records = records + list(previous.get("records") or [])
+        merged_previous_records = True
     records = postprocess_records(dedupe(records))
     records = sorted(records, key=record_sort_key, reverse=True)
     records, output_cap = signal_safe_cap(records, MAX_OUTPUT_RECORDS)
@@ -234,6 +256,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         if not records or guard["suspicious_drop"] or guard["all_lanes_zero"]:
             records = previous["records"]
             preserved_previous_records = True
+            merged_previous_records = False
             guard["preserved_previous_records"] = True
             guard["preserved"] = True
             guard["preservation_reason"] = "new refresh returned zero/near-zero records or all lanes zero; preserved previous live records"
@@ -256,7 +279,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     latest_refresh_record_count = sum(int((diag or {}).get("records_added") or 0) for diag in latest_refresh_diagnostics.values())
 
     payload = {
-        "schema_version": "0.12h",
+        "schema_version": "0.12j",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -266,10 +289,10 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.12h",
+            "schema_version": "0.12j",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
-            "refresh_frequency": "hourly",
+            "refresh_frequency": "tiered",
             "last_refreshed": timestamp,
             "last_data_update": timestamp,
             "last_sec_check": timestamp,
@@ -285,12 +308,16 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "counts_by_lane": counts_by_lane,
             "counts_by_form": counts_by_form,
             "preserved_previous_records": preserved_previous_records,
+            "merged_previous_records": merged_previous_records,
+            "fresh_record_count_before_merge": fresh_record_count_before_merge,
+            "refresh_scope": REFRESH_SCOPE,
+            "sec_request_stats": get_sec_request_stats(),
             "refresh_guard": guard,
             "latest_refresh_diagnostics": latest_refresh_diagnostics,
             "latest_refresh_record_count": latest_refresh_record_count,
             "loaded_dataset_record_count": len(records),
             "data_source_truth": "preserved_previous_dataset" if preserved_previous_records else "fresh_refresh_dataset",
-            "methodology_version": "0.12i-sp500-sec-pull-implied-price-13f-repair",
+            "methodology_version": "0.12j-tiered-sec-scanner-rate-limit-guard",
             "extraction_summary": extraction_summary(records),
             "output_cap": output_cap,
         },
@@ -335,17 +362,41 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.12i source-truth refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.12j tiered refresh: scope={REFRESH_SCOPE}; {len(companies)} issuers in this run; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])
     institutional_diag = base_diag(lane="institutional", forms=["13F-HR", "13F-HR/A"])
     proposed_sales_diag = base_diag(lane="proposed_sales", forms=["144", "144/A"])
 
-    form4_records, form4_diag = run_lane("SEC Form 4", collect_form4_records, companies, form4_diag)
-    ownership_records, ownership_diag = run_lane("SEC 13D/G Ownership", collect_ownership_records, companies, ownership_diag)
-    institutional_records, institutional_diag = run_lane("SEC 13F Institutional Holdings", collect_13f_records, companies, institutional_diag)
-    proposed_sales_records, proposed_sales_diag = run_lane("SEC Form 144 Proposed Sales", collect_form144_records, companies, proposed_sales_diag)
+    form4_records = []
+    ownership_records = []
+    institutional_records = []
+    proposed_sales_records = []
+
+    if RUN_FORM4:
+        form4_records, form4_diag = run_lane("SEC Form 4", collect_form4_records, companies, form4_diag)
+    else:
+        form4_diag["status"] = "disabled"
+        form4_diag["note"] = "Lane disabled by CAPITAL_TRACE_RUN_FORM4."
+
+    if RUN_OWNERSHIP:
+        ownership_records, ownership_diag = run_lane("SEC 13D/G Ownership", collect_ownership_records, companies, ownership_diag)
+    else:
+        ownership_diag["status"] = "disabled"
+        ownership_diag["note"] = "Lane disabled by CAPITAL_TRACE_RUN_OWNERSHIP."
+
+    if RUN_13F:
+        institutional_records, institutional_diag = run_lane("SEC 13F Institutional Holdings", collect_13f_records, companies, institutional_diag)
+    else:
+        institutional_diag["status"] = "disabled"
+        institutional_diag["note"] = "Lane disabled by CAPITAL_TRACE_RUN_13F."
+
+    if RUN_144:
+        proposed_sales_records, proposed_sales_diag = run_lane("SEC Form 144 Proposed Sales", collect_form144_records, companies, proposed_sales_diag)
+    else:
+        proposed_sales_diag["status"] = "disabled"
+        proposed_sales_diag["note"] = "Lane disabled by CAPITAL_TRACE_RUN_144."
 
     diagnostics = {
         "insider_form4": form4_diag,

@@ -68,3 +68,42 @@ After a green check, hard refresh the live site with Ctrl + Shift + R.
 - Form 144 records are proposed sale notices, not confirmed sales.
 - 13F records are delayed institutional holdings, not live trade records.
 - 13D/G records require source review for intent and ownership context.
+
+
+## v0.12j Tiered SEC Scanner notes
+
+This version replaces the brute-force S&P 500 hourly scan with a tiered scanner:
+
+- `refresh-capital-trace.yml` runs the fast core watchlist hourly.
+- `refresh-capital-trace-broad.yml` runs a slower S&P 500 batch scan daily.
+- Broad mode uses `CAPITAL_TRACE_MAX_ISSUERS_PER_RUN` and `CAPITAL_TRACE_ISSUER_OFFSET=auto` to rotate through issuers instead of hammering all S&P 500 companies in one run.
+- Broad mode sets `CAPITAL_TRACE_DISABLE_OWNERSHIP_BROWSE=true` to avoid the high-fanout old EDGAR Atom fallback that triggered repeated SEC HTTP 403 responses.
+- `CAPITAL_TRACE_SEC_MAX_403_ERRORS` opens a circuit breaker when SEC starts denying requests. The run preserves previous good records rather than continuing to hammer SEC.
+- `CAPITAL_TRACE_MERGE_PREVIOUS_RECORDS=true` merges new batch records with the existing live dataset so partial broad scans do not erase prior coverage.
+
+Recommended manual workflow setup:
+
+Fast core hourly:
+
+```yaml
+CAPITAL_TRACE_REFRESH_SCOPE: "fast"
+CAPITAL_TRACE_ISSUER_WATCHLIST_MODE: "core"
+CAPITAL_TRACE_SEC_REQUEST_DELAY_SECONDS: "0.5"
+CAPITAL_TRACE_SEC_MAX_403_ERRORS: "10"
+CAPITAL_TRACE_RUN_13F: "false"
+```
+
+Broad S&P 500 daily:
+
+```yaml
+CAPITAL_TRACE_REFRESH_SCOPE: "broad"
+CAPITAL_TRACE_ISSUER_WATCHLIST_MODE: "sp500"
+CAPITAL_TRACE_MAX_ISSUERS_PER_RUN: "100"
+CAPITAL_TRACE_ISSUER_OFFSET: "auto"
+CAPITAL_TRACE_SEC_REQUEST_DELAY_SECONDS: "0.75"
+CAPITAL_TRACE_SEC_MAX_403_ERRORS: "10"
+CAPITAL_TRACE_DISABLE_OWNERSHIP_BROWSE: "true"
+CAPITAL_TRACE_RUN_13F: "false"
+```
+
+13F should later be its own slower manager-watchlist workflow because 13F is delayed quarterly data and does not need hourly scanning.

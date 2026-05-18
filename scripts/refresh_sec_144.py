@@ -23,6 +23,7 @@ from refresh_sec_form4 import (
     parse_date,
     recent_filings_by_forms,
     sec_get,
+    sec_circuit_open,
 )
 
 FORM144_FORMS = {"144", "144/A"}
@@ -305,6 +306,10 @@ def collect_form144_records(companies: List[Company], diagnostics: Optional[Dict
         diagnostics["companies_checked"] = len(companies)
         diagnostics["forms_checked"] = ["144", "144/A"]
     for company in companies:
+        if sec_circuit_open():
+            if diagnostics is not None:
+                diagnostics.setdefault("errors", []).append("SEC circuit breaker opened; Form 144 lane stopped early to avoid further 403s.")
+            break
         filings = recent_filings_by_forms(company, FORM144_FORMS, MAX_144_PER_COMPANY, LOOKBACK_DAYS)
         if diagnostics is not None:
             diagnostics["filings_seen"] = int(diagnostics.get("filings_seen") or 0) + len(filings)

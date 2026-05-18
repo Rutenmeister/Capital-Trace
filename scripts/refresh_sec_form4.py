@@ -39,7 +39,10 @@ OUTPUT_JSON = DATA_DIR / "capital_trace.json"
 OUTPUT_JS = DATA_DIR / "capital_trace_data.js"
 
 USER_AGENT = os.environ.get("CAPITAL_TRACE_USER_AGENT", "CapitalTrace/0.6 contact@example.com")
-REQUEST_DELAY_SECONDS = float(os.environ.get("CAPITAL_TRACE_REQUEST_DELAY", "0.25"))
+REQUEST_DELAY_SECONDS = float(os.environ.get("CAPITAL_TRACE_SEC_REQUEST_DELAY_SECONDS", os.environ.get("CAPITAL_TRACE_REQUEST_DELAY", "0.25")))
+MAX_SEC_403_ERRORS = int(os.environ.get("CAPITAL_TRACE_SEC_MAX_403_ERRORS", "20"))
+MAX_ISSUERS_PER_RUN = int(os.environ.get("CAPITAL_TRACE_MAX_ISSUERS_PER_RUN", "0"))
+ISSUER_OFFSET_RAW = os.environ.get("CAPITAL_TRACE_ISSUER_OFFSET", "auto").strip().lower()
 MAX_FORM4_PER_COMPANY = int(os.environ.get("CAPITAL_TRACE_MAX_FORM4_PER_COMPANY", "30"))
 LOOKBACK_DAYS = int(os.environ.get("CAPITAL_TRACE_LOOKBACK_DAYS", "180"))
 MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "500"))
@@ -49,6 +52,24 @@ SEC_ARCHIVES = "https://www.sec.gov/Archives/edgar/data"
 SEC_COMPANY_TICKERS_JSON = "https://www.sec.gov/files/company_tickers.json"
 WIKIPEDIA_SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 SEC_GET_CACHE: Dict[str, Any] = {}
+SEC_REQUEST_COUNT = 0
+SEC_403_COUNT = 0
+SEC_CIRCUIT_OPEN = False
+SEC_CIRCUIT_PRINTED = False
+
+
+def get_sec_request_stats() -> Dict[str, Any]:
+    return {
+        "requests_attempted": SEC_REQUEST_COUNT,
+        "http_403_count": SEC_403_COUNT,
+        "circuit_open": SEC_CIRCUIT_OPEN,
+        "max_403_errors": MAX_SEC_403_ERRORS,
+        "request_delay_seconds": REQUEST_DELAY_SECONDS,
+    }
+
+
+def sec_circuit_open() -> bool:
+    return SEC_CIRCUIT_OPEN
 
 
 @dataclass
@@ -91,6 +112,12 @@ def parse_date(value: str | None) -> Optional[datetime]:
 
 
 def sec_get(url: str, *, as_json: bool = False) -> Any:
+    global SEC_REQUEST_COUNT, SEC_403_COUNT, SEC_CIRCUIT_OPEN, SEC_CIRCUIT_PRINTED
+    if SEC_CIRCUIT_OPEN:
+        if not SEC_CIRCUIT_PRINTED:
+            print(f"[WARN] SEC circuit breaker open after {SEC_403_COUNT} HTTP 403 responses; skipping remaining SEC requests.", file=sys.stderr)
+            SEC_CIRCUIT_PRINTED = True
+        return None
     cache_key = f"json:{url}" if as_json else f"text:{url}"
     if cache_key in SEC_GET_CACHE:
         return SEC_GET_CACHE[cache_key]
@@ -99,6 +126,7 @@ def sec_get(url: str, *, as_json: bool = False) -> Any:
         "Accept": "application/json,text/xml,application/xml,text/html,*/*",
     }
     req = urllib.request.Request(url, headers=headers)
+    SEC_REQUEST_COUNT += 1
     time.sleep(REQUEST_DELAY_SECONDS)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -111,6 +139,11 @@ def sec_get(url: str, *, as_json: bool = False) -> Any:
             SEC_GET_CACHE[cache_key] = text
             return text
     except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            SEC_403_COUNT += 1
+            if SEC_403_COUNT >= MAX_SEC_403_ERRORS:
+                SEC_CIRCUIT_OPEN = True
+                print(f"[WARN] SEC HTTP 403 limit reached ({SEC_403_COUNT}/{MAX_SEC_403_ERRORS}); opening circuit breaker.", file=sys.stderr)
         print(f"[WARN] SEC HTTP {exc.code}: {url}", file=sys.stderr)
         return None
     except Exception as exc:
@@ -171,18 +204,45 @@ def load_watchlist_from_path(path: Path) -> List[Company]:
     return companies
 
 
+
+def apply_issuer_window(companies: List[Company], *, mode: str) -> List[Company]:
+    """Limit/rotate issuer coverage so broad scans do not hammer SEC in one run."""
+    total = len(companies)
+    if total == 0 or MAX_ISSUERS_PER_RUN <= 0 or MAX_ISSUERS_PER_RUN >= total:
+        return companies
+    if ISSUER_OFFSET_RAW in {"", "auto"}:
+        # Deterministic daily rotation for broad coverage. A daily broad job with
+        # max=100 covers roughly the full S&P 500 across a trading week.
+        day = int(now_utc().strftime("%j"))
+        offset = (day * MAX_ISSUERS_PER_RUN) % total
+    else:
+        try:
+            offset = int(ISSUER_OFFSET_RAW) % total
+        except ValueError:
+            offset = 0
+    rotated = companies[offset:] + companies[:offset]
+    selected = rotated[:MAX_ISSUERS_PER_RUN]
+    print(f"[OK] issuer window mode={mode} selected={len(selected)} total={total} offset={offset}", file=sys.stderr)
+    return selected
+
 def load_watchlist() -> List[Company]:
     mode = os.environ.get("CAPITAL_TRACE_ISSUER_WATCHLIST_MODE", "file").strip().lower()
-    if mode in {"sp500", "s&p500", "s_and_p_500"}:
+    companies: List[Company] = []
+    if mode in {"sp500", "s&p500", "s_and_p_500", "broad"}:
         companies = fetch_sp500_watchlist()
         if companies:
             print(f"[OK] issuer watchlist mode=sp500 companies={len(companies)}", file=sys.stderr)
-            return companies
-        if SP500_WATCHLIST_PATH.exists():
-            return load_watchlist_from_path(SP500_WATCHLIST_PATH)
-    if not WATCHLIST_PATH.exists():
-        raise FileNotFoundError(f"Missing {WATCHLIST_PATH}")
-    return load_watchlist_from_path(WATCHLIST_PATH)
+        elif SP500_WATCHLIST_PATH.exists():
+            companies = load_watchlist_from_path(SP500_WATCHLIST_PATH)
+    elif mode in {"core", "file", "watchlist"}:
+        if not WATCHLIST_PATH.exists():
+            raise FileNotFoundError(f"Missing {WATCHLIST_PATH}")
+        companies = load_watchlist_from_path(WATCHLIST_PATH)
+    else:
+        if not WATCHLIST_PATH.exists():
+            raise FileNotFoundError(f"Missing {WATCHLIST_PATH}")
+        companies = load_watchlist_from_path(WATCHLIST_PATH)
+    return apply_issuer_window(companies, mode=mode)
 
 
 def company_submissions(company: Company) -> Dict[str, Any]:
@@ -618,6 +678,10 @@ def collect_form4_records(companies: List[Company], diagnostics: Optional[Dict[s
         diagnostics.setdefault("errors", [])
 
     for company in companies:
+        if sec_circuit_open():
+            if diagnostics is not None:
+                diagnostics.setdefault("errors", []).append("SEC circuit breaker opened; Form 4 lane stopped early to avoid further 403s.")
+            break
         print(f"[INFO] {company.ticker} CIK {company.cik10}")
         if diagnostics is not None:
             diagnostics["companies_checked"] += 1

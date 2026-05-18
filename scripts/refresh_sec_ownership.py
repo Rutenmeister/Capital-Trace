@@ -22,6 +22,7 @@ import json
 import re
 import time
 import urllib.parse
+import os
 import xml.etree.ElementTree as ET
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -39,10 +40,13 @@ from refresh_sec_form4 import (
     parse_date,
     recent_filings_by_forms,
     sec_get,
+    sec_circuit_open,
 )
 
 OWNERSHIP_FORMS = {"SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"}
 MAX_OWNERSHIP_PER_COMPANY = 20
+DISABLE_OWNERSHIP_BROWSE = os.environ.get("CAPITAL_TRACE_DISABLE_OWNERSHIP_BROWSE", "false").strip().lower() in {"1", "true", "yes"}
+REFRESH_SCOPE = os.environ.get("CAPITAL_TRACE_REFRESH_SCOPE", "fast").strip().lower()
 
 
 def strip_tags(text: str) -> str:
@@ -166,6 +170,11 @@ def browse_ownership_filings(company: Company) -> List[Dict[str, Any]]:
 
 def recent_ownership_filings(company: Company) -> List[Dict[str, Any]]:
     rows = recent_filings_by_forms(company, OWNERSHIP_FORMS, MAX_OWNERSHIP_PER_COMPANY)
+    # In broad/S&P 500 mode, do not fan out into old browse-edgar Atom URLs for
+    # every issuer/form pair. That pattern caused SEC 403 throttling. Broad mode
+    # relies on the submissions endpoint and preserves prior data when throttled.
+    if DISABLE_OWNERSHIP_BROWSE or REFRESH_SCOPE in {"broad", "sp500"}:
+        return rows
     # Add browse results because Schedule 13D/G may not appear in a target company's
     # recent submissions in every case.
     seen = {r.get("accession") for r in rows}
@@ -392,6 +401,10 @@ def collect_ownership_records(companies: List[Company], diagnostics: Optional[Di
         diagnostics.setdefault("errors", [])
 
     for company in companies:
+        if sec_circuit_open():
+            if diagnostics is not None:
+                diagnostics.setdefault("errors", []).append("SEC circuit breaker opened; 13D/G lane stopped early to avoid further 403s.")
+            break
         print(f"[INFO] {company.ticker} ownership lane")
         if diagnostics is not None:
             diagnostics["companies_checked"] += 1
