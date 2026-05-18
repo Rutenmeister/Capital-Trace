@@ -52,39 +52,74 @@ def fmt_money(value: Any) -> str:
 def normalize_13f_market_value(record: Dict[str, Any]) -> tuple[Any, List[str]]:
     """Return the best 13F USD market value plus integrity notes.
 
-    SEC 13F information-table value fields are reported in thousands of dollars.
-    Capital Trace must display actual USD. This helper also guards older JSON
-    where a USD value or raw-thousands value may already have been scaled 1,000x.
+    SEC 13F information-table <value> fields are reported in thousands of
+    dollars. Older Capital Trace JSON may contain one or more already-inflated
+    fields, so this function uses multiple candidates and normalizes obvious
+    1,000x errors down before display/audit.
     """
     notes: List[str] = []
-    severe_single_holding = 2_000_000_000_000
+    severe_single_holding = 2_000_000_000_000  # $2T for one security is a hard red flag here.
 
-    raw_thousands = record.get("reported_market_value_thousands")
-    if present(raw_thousands):
-        raw_num = num(raw_thousands)
-        if raw_num is not None:
-            # A raw 13F thousands value above 2B would imply a >$2T single holding.
-            # For this watchlist product that is more likely to be a legacy USD value
-            # stored in the thousands field than a real raw 13F value.
-            if raw_num >= 2_000_000_000:
-                notes.append("13F raw thousands field looked already USD-scaled; display treated it as USD.")
-                return raw_num, notes
-            return int(raw_num * 1000), notes
+    candidates: List[float] = []
 
-    usd_explicit = record.get("reported_market_value_usd")
-    if present(usd_explicit):
-        usd_num = num(usd_explicit)
-        if usd_num is not None and usd_num >= severe_single_holding:
-            notes.append("13F explicit USD value looked double-scaled; display normalized down by 1,000.")
-            return usd_num / 1000, notes
-        return usd_explicit, notes
+    raw_thousands = num(record.get("reported_market_value_thousands"))
+    if raw_thousands is not None:
+        # Normal SEC value: thousands -> USD. If an old record stored USD in this
+        # field, using the smaller plausible candidate avoids a second multiply.
+        if raw_thousands >= severe_single_holding:
+            candidates.append(raw_thousands / 1000)
+            notes.append("13F raw-thousands field looked double-scaled; normalized down by 1,000.")
+        elif raw_thousands >= 2_000_000_000:
+            candidates.append(raw_thousands)
+            notes.append("13F raw-thousands field looked already USD-scaled; treated as USD.")
+        else:
+            candidates.append(raw_thousands * 1000)
 
-    value = record.get("market_value") or record.get("transaction_value")
-    n = num(value)
-    if n is not None and n >= severe_single_holding:
-        notes.append("13F market value looked double-scaled; display normalized down by 1,000.")
-        return n / 1000, notes
-    return value, notes
+    for key in ["reported_market_value_usd", "market_value", "transaction_value"]:
+        value = num(record.get(key))
+        if value is None:
+            continue
+        while value >= severe_single_holding:
+            value = value / 1000
+            notes.append(f"13F {key} looked double-scaled; normalized down by 1,000.")
+        candidates.append(value)
+
+    valid = [c for c in candidates if c is not None and c > 0]
+    if not valid:
+        return None, notes
+
+    # Use the smallest plausible value. In legacy broken records, the inflated
+    # value and corrected value often coexist; the inflated value is never the
+    # vital point we want to show.
+    return min(valid), notes
+
+
+def repair_13f_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize 13F value fields in both freshly parsed and preserved legacy records."""
+    form = str(record.get("filing_type") or record.get("source_form") or record.get("source_type") or "").upper()
+    lane = str(record.get("source_group") or "").upper()
+    if "13F" not in form and "INSTITUTIONAL" not in lane:
+        return record
+
+    r = dict(record)
+    usd, notes = normalize_13f_market_value(r)
+    if usd is not None:
+        usd_int = int(round(float(usd)))
+        r["reported_market_value_usd"] = usd_int
+        r["market_value"] = usd_int
+        r["transaction_value"] = usd_int
+        # Keep a clean derived thousands field for transparency.
+        r["reported_market_value_thousands"] = int(round(usd_int / 1000))
+        r["market_value_unit_basis"] = r.get("market_value_unit_basis") or "SEC 13F value field converted from thousands of dollars; legacy values normalized when necessary"
+        r["position_value_label"] = fmt_money(usd_int)
+        r["value_basis_label"] = "13F value converted from thousands to USD"
+
+    # Rebuild stale UI-derived text/quality if a previous version wrote bad values.
+    for field in ["vital_point", "key_figures", "person_entity", "source_trust", "extraction_quality"]:
+        r.pop(field, None)
+    if notes:
+        r["unit_repair_notes"] = sorted(set(str(n) for n in notes))
+    return r
 
 
 def fmt_price(value: Any) -> str:
@@ -209,7 +244,7 @@ def add_vital_fields(record: Dict[str, Any]) -> Dict[str, Any]:
         key_figures = {
             "Reported shares": fmt_number(r.get("shares")),
             "Reported market value": fmt_money(value),
-            "SEC reported value basis": "Converted from thousands of dollars",
+            "SEC reported value basis": str(r.get("market_value_unit_basis") or "Converted from thousands of dollars"),
             "Report period": str(r.get("period_end") or MISSING_NOT_PARSED),
             "CUSIP": str(r.get("cusip") or MISSING_NOT_PARSED),
             "Position rank": str(r.get("position_rank") or MISSING_NOT_PARSED),
@@ -248,7 +283,7 @@ def add_vital_fields(record: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def postprocess_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [add_vital_fields(r) for r in records]
+    return [add_vital_fields(repair_13f_record(r)) for r in records]
 
 
 def extraction_summary(records: List[Dict[str, Any]]) -> Dict[str, int]:

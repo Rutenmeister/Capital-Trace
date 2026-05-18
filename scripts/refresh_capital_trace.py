@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.12f master refresh.
+Capital Trace v0.12g master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -8,7 +8,7 @@ Universal SEC filing engine + trust layer:
 - writes diagnostics so the UI can say what was checked, found, or failed
 - commits one combined data/capital_trace.json payload
 
-Supported watchlist lanes in v0.12f:
+Supported watchlist lanes in v0.12g:
 - Form 4 / 4/A insider transactions
 - SC 13D, SC 13D/A, SC 13G, SC 13G/A beneficial ownership records
 - 13F-HR / 13F-HR/A institutional holdings records
@@ -238,6 +238,12 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             previous_diags = previous.get("lane_diagnostics") or (previous.get("metadata") or {}).get("lane_diagnostics") or {}
             if isinstance(previous_diags, dict) and previous_diags:
                 diagnostics = previous_diags
+            # Previous good records may have been produced by older code. Re-run
+            # postprocessing after preservation so legacy 13F unit bugs are repaired
+            # before the audit step inspects the generated file.
+            records = postprocess_records(dedupe(records))
+            records = sorted(records, key=record_sort_key, reverse=True)
+            records, output_cap = signal_safe_cap(records, MAX_OUTPUT_RECORDS)
 
     timestamp = iso_now()
     source_groups = sorted({str(r.get("source_group") or "Unknown") for r in records}) or ["SEC Insider Ownership", "SEC Ownership Thresholds"]
@@ -246,7 +252,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     counts_by_form = filing_type_counts(records)
 
     payload = {
-        "schema_version": "0.12f",
+        "schema_version": "0.12g",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -256,7 +262,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.12f",
+            "schema_version": "0.12g",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
             "refresh_frequency": "hourly",
@@ -277,7 +283,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "preserved_previous_records": preserved_previous_records,
             "refresh_guard": guard,
             "latest_refresh_diagnostics": latest_refresh_diagnostics,
-            "methodology_version": "0.12f-signal-safe-capping-and-13f-unit-repair",
+            "methodology_version": "0.12g-preserved-data-repair-and-signal-safe-capping",
             "extraction_summary": extraction_summary(records),
             "output_cap": output_cap,
         },
@@ -320,7 +326,7 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.12f stability refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.12g stability refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])

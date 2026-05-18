@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capital Trace data integrity audit v0.12f.
+"""Capital Trace data integrity audit v0.12g.
 
 Run from the repository root after a refresh:
     python scripts/audit_data_integrity.py
@@ -15,6 +15,8 @@ import json
 import math
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+
+from extraction_utils import normalize_13f_market_value
 
 DATA_PATH = Path("data/capital_trace.json")
 SEVERE_SINGLE_13F_VALUE_USD = 2_000_000_000_000
@@ -56,21 +58,9 @@ def number(value: Any) -> float | None:
 
 
 def best_13f_value(record: Dict[str, Any]) -> Tuple[float | None, List[str]]:
-    notes: List[str] = []
-    raw_thousands = number(record.get("reported_market_value_thousands"))
-    if raw_thousands is not None:
-        if raw_thousands >= 2_000_000_000:
-            notes.append("reported_market_value_thousands looks already USD-scaled")
-            return raw_thousands, notes
-        return raw_thousands * 1000, notes
-    explicit_usd = number(record.get("reported_market_value_usd"))
-    if explicit_usd is not None:
-        return explicit_usd, notes
-    for key in ["market_value", "transaction_value"]:
-        val = number(record.get(key))
-        if val is not None:
-            return val, notes
-    return None, notes
+    value, notes = normalize_13f_market_value(record)
+    n = number(value)
+    return n, notes
 
 
 def main() -> int:
@@ -128,7 +118,7 @@ def main() -> int:
                 if expected and abs(explicit_usd - expected) / expected > 0.02:
                     severe.append(f"{rid}: 13F USD value does not match raw thousands conversion")
             if not rec.get("market_value_unit_basis"):
-                warnings.append(f"{rid}: 13F missing market_value_unit_basis")
+                warnings.append(f"{rid}: 13F missing market_value_unit_basis; display should fall back but refresh should populate it")
 
         if is_144(rec):
             # 144 is proposed sale only. The record should say so somewhere obvious.
