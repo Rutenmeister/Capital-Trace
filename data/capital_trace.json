@@ -1,7 +1,7 @@
 {
   "schema_version": "0.12k",
   "data_mode": "sec-watchlist-multilane",
-  "generated_at": "2026-05-18T19:48:06Z",
+  "generated_at": "2026-05-18T19:53:07Z",
   "lookback_days": 180,
   "records_count": 650,
   "lane_count": 4,
@@ -89,9 +89,9 @@
     "data_mode": "sec-watchlist-multilane",
     "source_pipeline": "sec-universal-watchlist-template",
     "refresh_frequency": "tiered",
-    "last_refreshed": "2026-05-18T19:48:06Z",
-    "last_data_update": "2026-05-18T19:48:06Z",
-    "last_sec_check": "2026-05-18T19:48:06Z",
+    "last_refreshed": "2026-05-18T19:53:07Z",
+    "last_data_update": "2026-05-18T19:53:07Z",
+    "last_sec_check": "2026-05-18T19:53:07Z",
     "next_scheduled_check": "2026-05-18T20:00:00Z",
     "source_groups": [
       "SEC Insider Ownership",
@@ -140,10 +140,10 @@
       "http_403_count": 10,
       "circuit_open": true,
       "max_403_errors": 10,
-      "request_delay_seconds": 0.6
+      "request_delay_seconds": 0.75
     },
     "refresh_guard": {
-      "new_record_count": 0,
+      "new_record_count": 650,
       "previous_record_count": 650,
       "lane_record_counts": {
         "index_discovery": 0,
@@ -153,24 +153,43 @@
         "proposed_sales_144": 0
       },
       "all_lanes_zero": true,
-      "suspicious_drop": true,
+      "suspicious_drop": false,
       "preserved_previous_records": true,
       "preserved": true,
       "preservation_reason": "new refresh returned zero/near-zero records or all lanes zero; preserved previous live records"
     },
     "latest_refresh_diagnostics": {
       "index_discovery": {
-        "status": "disabled",
+        "status": "failed",
         "lane": "index_discovery",
         "forms_checked": [
+          "144",
+          "144/A",
           "4",
           "4/A",
           "SC 13D",
           "SC 13D/A",
           "SC 13G",
-          "SC 13G/A",
-          "144",
-          "144/A"
+          "SC 13G/A"
+        ],
+        "companies_checked": 10,
+        "lookback_days": 14,
+        "filings_seen": 0,
+        "filings_matched": 0,
+        "records_added": 0,
+        "errors": [
+          "No SEC daily-index files loaded for the requested window."
+        ],
+        "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available.",
+        "index_days_attempted": 14,
+        "index_days_loaded": 0
+      },
+      "insider_form4": {
+        "status": "disabled",
+        "lane": "insider",
+        "forms_checked": [
+          "4",
+          "4/A"
         ],
         "companies_checked": 0,
         "lookback_days": 180,
@@ -178,25 +197,10 @@
         "filings_matched": 0,
         "records_added": 0,
         "errors": [],
-        "note": "Lane not run."
-      },
-      "insider_form4": {
-        "status": "checked_no_records",
-        "lane": "insider",
-        "forms_checked": [
-          "4",
-          "4/A"
-        ],
-        "companies_checked": 10,
-        "lookback_days": 180,
-        "filings_seen": 0,
-        "filings_matched": 0,
-        "records_added": 0,
-        "errors": [],
-        "note": "Lane completed and found no matching filings in the current watchlist/lookback window."
+        "note": "Lane disabled by workflow or replaced by SEC daily-index discovery."
       },
       "ownership_13d_13g": {
-        "status": "failed",
+        "status": "disabled",
         "lane": "ownership",
         "forms_checked": [
           "SC 13D",
@@ -209,46 +213,38 @@
         "filings_seen": 0,
         "filings_matched": 0,
         "records_added": 0,
-        "errors": [
-          "SEC circuit breaker opened; 13D/G lane stopped early to avoid further 403s."
-        ],
-        "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available."
+        "errors": [],
+        "note": "Lane disabled by workflow or replaced by SEC daily-index discovery."
       },
       "institutional_13f": {
-        "status": "failed",
+        "status": "disabled",
         "lane": "institutional",
         "forms_checked": [
           "13F-HR",
           "13F-HR/A"
         ],
-        "companies_checked": 6,
+        "companies_checked": 0,
         "lookback_days": 180,
         "filings_seen": 0,
         "filings_matched": 0,
         "records_added": 0,
-        "errors": [
-          "SEC circuit breaker opened; 13F lane stopped early to avoid further 403s."
-        ],
-        "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available.",
-        "managers_checked": 0,
-        "holdings_parsed": 0
+        "errors": [],
+        "note": "Lane disabled by CAPITAL_TRACE_RUN_13F."
       },
       "proposed_sales_144": {
-        "status": "failed",
+        "status": "disabled",
         "lane": "proposed_sales",
         "forms_checked": [
           "144",
           "144/A"
         ],
-        "companies_checked": 10,
+        "companies_checked": 0,
         "lookback_days": 180,
         "filings_seen": 0,
         "filings_matched": 0,
         "records_added": 0,
-        "errors": [
-          "SEC circuit breaker opened; Form 144 lane stopped early to avoid further 403s."
-        ],
-        "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available."
+        "errors": [],
+        "note": "Lane disabled by workflow or replaced by SEC daily-index discovery."
       }
     },
     "latest_refresh_record_count": 0,
@@ -272,17 +268,36 @@
   },
   "latest_refresh_diagnostics": {
     "index_discovery": {
-      "status": "disabled",
+      "status": "failed",
       "lane": "index_discovery",
       "forms_checked": [
+        "144",
+        "144/A",
         "4",
         "4/A",
         "SC 13D",
         "SC 13D/A",
         "SC 13G",
-        "SC 13G/A",
-        "144",
-        "144/A"
+        "SC 13G/A"
+      ],
+      "companies_checked": 10,
+      "lookback_days": 14,
+      "filings_seen": 0,
+      "filings_matched": 0,
+      "records_added": 0,
+      "errors": [
+        "No SEC daily-index files loaded for the requested window."
+      ],
+      "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available.",
+      "index_days_attempted": 14,
+      "index_days_loaded": 0
+    },
+    "insider_form4": {
+      "status": "disabled",
+      "lane": "insider",
+      "forms_checked": [
+        "4",
+        "4/A"
       ],
       "companies_checked": 0,
       "lookback_days": 180,
@@ -290,25 +305,10 @@
       "filings_matched": 0,
       "records_added": 0,
       "errors": [],
-      "note": "Lane not run."
-    },
-    "insider_form4": {
-      "status": "checked_no_records",
-      "lane": "insider",
-      "forms_checked": [
-        "4",
-        "4/A"
-      ],
-      "companies_checked": 10,
-      "lookback_days": 180,
-      "filings_seen": 0,
-      "filings_matched": 0,
-      "records_added": 0,
-      "errors": [],
-      "note": "Lane completed and found no matching filings in the current watchlist/lookback window."
+      "note": "Lane disabled by workflow or replaced by SEC daily-index discovery."
     },
     "ownership_13d_13g": {
-      "status": "failed",
+      "status": "disabled",
       "lane": "ownership",
       "forms_checked": [
         "SC 13D",
@@ -321,46 +321,38 @@
       "filings_seen": 0,
       "filings_matched": 0,
       "records_added": 0,
-      "errors": [
-        "SEC circuit breaker opened; 13D/G lane stopped early to avoid further 403s."
-      ],
-      "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available."
+      "errors": [],
+      "note": "Lane disabled by workflow or replaced by SEC daily-index discovery."
     },
     "institutional_13f": {
-      "status": "failed",
+      "status": "disabled",
       "lane": "institutional",
       "forms_checked": [
         "13F-HR",
         "13F-HR/A"
       ],
-      "companies_checked": 6,
+      "companies_checked": 0,
       "lookback_days": 180,
       "filings_seen": 0,
       "filings_matched": 0,
       "records_added": 0,
-      "errors": [
-        "SEC circuit breaker opened; 13F lane stopped early to avoid further 403s."
-      ],
-      "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available.",
-      "managers_checked": 0,
-      "holdings_parsed": 0
+      "errors": [],
+      "note": "Lane disabled by CAPITAL_TRACE_RUN_13F."
     },
     "proposed_sales_144": {
-      "status": "failed",
+      "status": "disabled",
       "lane": "proposed_sales",
       "forms_checked": [
         "144",
         "144/A"
       ],
-      "companies_checked": 10,
+      "companies_checked": 0,
       "lookback_days": 180,
       "filings_seen": 0,
       "filings_matched": 0,
       "records_added": 0,
-      "errors": [
-        "SEC circuit breaker opened; Form 144 lane stopped early to avoid further 403s."
-      ],
-      "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available."
+      "errors": [],
+      "note": "Lane disabled by workflow or replaced by SEC daily-index discovery."
     }
   },
   "latest_refresh_record_count": 0,
