@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.12g master refresh.
+Capital Trace v0.12h master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -8,7 +8,7 @@ Universal SEC filing engine + trust layer:
 - writes diagnostics so the UI can say what was checked, found, or failed
 - commits one combined data/capital_trace.json payload
 
-Supported watchlist lanes in v0.12g:
+Supported watchlist lanes in v0.12h:
 - Form 4 / 4/A insider transactions
 - SC 13D, SC 13D/A, SC 13G, SC 13G/A beneficial ownership records
 - 13F-HR / 13F-HR/A institutional holdings records
@@ -42,7 +42,7 @@ from extraction_utils import postprocess_records, extraction_summary
 
 import os
 
-MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "10000"))
+MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "5000"))
 SUPPORTED_FORMS = ["4", "4/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "13F-HR", "13F-HR/A", "144", "144/A"]
 
 
@@ -234,6 +234,8 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         if not records or guard["suspicious_drop"] or guard["all_lanes_zero"]:
             records = previous["records"]
             preserved_previous_records = True
+            guard["preserved_previous_records"] = True
+            guard["preserved"] = True
             guard["preservation_reason"] = "new refresh returned zero/near-zero records or all lanes zero; preserved previous live records"
             previous_diags = previous.get("lane_diagnostics") or (previous.get("metadata") or {}).get("lane_diagnostics") or {}
             if isinstance(previous_diags, dict) and previous_diags:
@@ -251,8 +253,10 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
     counts_by_lane = source_group_counts(records)
     counts_by_form = filing_type_counts(records)
 
+    latest_refresh_record_count = sum(int((diag or {}).get("records_added") or 0) for diag in latest_refresh_diagnostics.values())
+
     payload = {
-        "schema_version": "0.12g",
+        "schema_version": "0.12h",
         "data_mode": "sec-watchlist-multilane",
         "generated_at": timestamp,
         "lookback_days": LOOKBACK_DAYS,
@@ -262,7 +266,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
         "lane_diagnostics": diagnostics,
         "metadata": {
             "product": "Capital Trace",
-            "schema_version": "0.12g",
+            "schema_version": "0.12h",
             "data_mode": "sec-watchlist-multilane",
             "source_pipeline": "sec-universal-watchlist-template",
             "refresh_frequency": "hourly",
@@ -283,11 +287,16 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "preserved_previous_records": preserved_previous_records,
             "refresh_guard": guard,
             "latest_refresh_diagnostics": latest_refresh_diagnostics,
-            "methodology_version": "0.12g-preserved-data-repair-and-signal-safe-capping",
+            "latest_refresh_record_count": latest_refresh_record_count,
+            "loaded_dataset_record_count": len(records),
+            "data_source_truth": "preserved_previous_dataset" if preserved_previous_records else "fresh_refresh_dataset",
+            "methodology_version": "0.12h-source-truth-cusip-display-and-signal-safe-capping",
             "extraction_summary": extraction_summary(records),
             "output_cap": output_cap,
         },
         "latest_refresh_diagnostics": latest_refresh_diagnostics,
+        "latest_refresh_record_count": latest_refresh_record_count,
+        "data_source_truth": "preserved_previous_dataset" if preserved_previous_records else "fresh_refresh_dataset",
         "output_cap": output_cap,
         "records": records,
     }
@@ -326,7 +335,7 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.12g stability refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.12h source-truth refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])

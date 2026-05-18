@@ -1,4 +1,4 @@
-# Capital Trace v0.12g — 13F Unit Repair + Signal-Safe Capping
+# Capital Trace v0.12h — Source Truth + CUSIP Display Fix
 
 Capital Trace is an Edgefield Research SEC filing terminal. It converts public SEC records into an evidence-ranked reading queue with source links, caveats, lane diagnostics, extraction quality, and vital-point summaries.
 
@@ -9,32 +9,19 @@ Capital Trace is an Edgefield Research SEC filing terminal. It converts public S
 - SEC 13F-HR / 13F-HR/A institutional holdings
 - SEC Form 144 / 144/A proposed sale notices
 
-## What v0.12 adds
+## What v0.12h fixes
 
-- Sharper Vital Point sentences across all current filing lanes.
-- Better key-figure panels for shares, price, value, ownership percent, report period, CUSIP, broker, and proposed sale fields when parsed.
-- Top Vital Points focus view.
-- Extraction Quality readout in the right rail.
-- Improved Form 144 extraction patterns for proposed shares, market value, broker, relationship, and prior-three-month sale hints.
-- 13F records now include manager CIK, position rank, position weight when calculable, and an explicit pending prior-quarter comparison label.
-- More explicit missing-field language: not parsed, not applicable, and pending comparison where appropriate.
-- Scoring remains conservative: Form 144 is proposed sale context, 13F is delayed holdings context, and insider sales are treated as context unless unusually strong.
-
-
-## v0.12g/v0.12g/v0.12g integrity fixes
-
-- Fixes SEC 13F market-value interpretation. SEC 13F information-table `value` fields are reported in thousands of dollars; Capital Trace now stores both `reported_market_value_thousands` and converted USD fields.
-- Adds frontend guards for older live JSON records that may have been displayed 1,000x too high. Example: Berkshire/AAPL should display around `$20.47B`, not `$20,471.92B`.
-- Updates the schema so 13F value-basis fields are explicit.
-- Updates the 13F key-figure panel to show `SEC reported value basis: Converted from thousands of dollars`.
-- Keeps all missing-data language honest: not disclosed / not parsed / not applicable / pending comparison.
-- v0.12g keeps those audit checks and adds an empty-dataset guard so all-zero refreshes fail or preserve prior records instead of silently committing bad data.
-- v0.12g keeps Form 144 proposed-sale notices out of confirmed-sale counts and filters.
-- v0.12g keeps conservative Form 144 seller extraction to avoid generic table-label captures.
+- Keeps the 13F value-unit repair so 13F values display as actual USD, not 1,000x inflated values.
+- Repairs preserved legacy 13F records before audit when possible.
+- Keeps signal-safe output capping so high-signal records are not silently discarded by a global cap.
+- Cleans up 13F display titles: unmapped CUSIPs no longer appear as the headline when issuer/company name is available. CUSIP remains visible as a key figure.
+- Separates loaded dataset coverage from latest refresh diagnostics so preserved prior records are not confused with a zero-record refresh attempt.
+- Adds clearer data-source-truth wording in the Current Trace Brief.
+- Keeps the 20-record center Evidence Queue display.
 
 ## Upload guidance
 
-Do not upload `data/` unless intentionally resetting live data.
+Do not upload `data/` unless intentionally resetting or restoring live data.
 
 Upload these files/folders:
 
@@ -54,12 +41,16 @@ scripts/audit_data_integrity.py
 .github/workflows/refresh-capital-trace.yml
 ```
 
-If `.github` is hidden, manually update `.github/workflows/refresh-capital-trace.yml` so it runs:
+If `.github` is hidden, manually update `.github/workflows/refresh-capital-trace.yml` so it runs the master refresh and audit scripts.
+
+## Suggested workflow settings
 
 ```yaml
-run: python scripts/refresh_capital_trace.py
-# then
-run: python scripts/audit_data_integrity.py
+CAPITAL_TRACE_LOOKBACK_DAYS: "180"
+CAPITAL_TRACE_MAX_FORM4_PER_COMPANY: "100"
+CAPITAL_TRACE_MAX_OUTPUT_RECORDS: "5000"
+CAPITAL_TRACE_USER_AGENT: "CapitalTrace/0.12h rutenmeister@users.noreply.github.com"
+CAPITAL_TRACE_EMPTY_DATA_GUARD: "true"
 ```
 
 Then run:
@@ -77,10 +68,3 @@ After a green check, hard refresh the live site with Ctrl + Shift + R.
 - Form 144 records are proposed sale notices, not confirmed sales.
 - 13F records are delayed institutional holdings, not live trade records.
 - 13D/G records require source review for intent and ownership context.
-
-
-## v0.12g UI fix
-
-- Center Evidence Queue now displays the first 20 matching records instead of 10.
-- Top signal focus view is relabeled to Top 20 highest signal and uses the shared 20-record display limit.
-- Lane Health now separates current loaded dataset coverage from latest refresh diagnostics, so preserved prior records are not confused with a zero-record refresh attempt.

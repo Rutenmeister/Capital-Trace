@@ -152,6 +152,28 @@ function normalize13FMarketValue(record = {}) {
   return value;
 }
 
+function isCusipTicker(value = '') {
+  return /^CUSIP\s+/i.test(String(value || '').trim());
+}
+
+function displayPrimaryLabel(record = {}) {
+  const ticker = String(record.ticker || '').trim();
+  const company = String(record.company || '').trim();
+  if (ticker && ticker !== '-' && !isCusipTicker(ticker)) return ticker;
+  if (company && company !== '-') return company;
+  const cusip = String(record.cusip || '').trim();
+  return cusip ? `CUSIP ${cusip}` : '-';
+}
+
+function displayCompanyLine(record = {}) {
+  const label = displayPrimaryLabel(record);
+  const company = String(record.company || '').trim();
+  const ticker = String(record.ticker || '').trim();
+  if (company && company !== '-' && company !== label) return company;
+  if (ticker && ticker !== '-' && ticker !== label && !isCusipTicker(ticker)) return ticker;
+  return company || ticker || '-';
+}
+
 function sanitizeKeyFigures(record = {}, normalizedMarketValue = null) {
   const figures = { ...(record.key_figures || record.figures || {}) };
   if (is13FLikeRecord(record)) {
@@ -166,7 +188,7 @@ function sanitizeVitalPoint(record = {}, normalizedMarketValue = null) {
   if (!is13FLikeRecord(record)) return record.vital_point || '';
   const value = normalizedMarketValue ?? normalize13FMarketValue(record);
   const filer = record.filer || record.manager_name || 'Institutional manager';
-  const ticker = record.ticker || record.company || 'reported issuer';
+  const ticker = displayPrimaryLabel(record) || 'reported issuer';
   const shares = toNumber(record.shares, null);
   const period = record.period_end || record.report_period || record.event_date || 'the reported period';
   if (shares !== null && Number.isFinite(shares)) {
@@ -333,6 +355,8 @@ function normalizeCapitalTraceRecord(record = {}) {
     record_id: recordId,
     ticker: record.ticker || '-',
     company: record.company || '-',
+    display_label: displayPrimaryLabel(record),
+    display_subtitle: displayCompanyLine(record),
     source_group: record.source_group || inferSourceGroup(sourceType),
     source_type: sourceType,
     source_form: rawSourceForm || sourceType,
@@ -844,7 +868,7 @@ function renderLaneHealth() {
     const latestCount = Number(diag.records_added || 0);
     const loadedCount = Number(diag.loaded_count ?? latestCount);
     const guard = state.metadata.refresh_guard || {};
-    const preserved = Boolean(guard.preserved_previous_records || guard.preserved || guard.status === 'preserved_previous');
+    const preserved = Boolean(guard.preserved_previous_records || guard.preserved || guard.status === 'preserved_previous' || guard.preservation_reason || state.metadata.data_source_truth === 'preserved_previous_dataset');
     const defaultNote = loadedCount
       ? 'Loaded dataset contains records for this lane. Latest-refresh diagnostics may differ if the empty-data guard preserved a prior good dataset.'
       : 'No records from this lane are present in the current loaded data.';
@@ -873,8 +897,14 @@ function renderTraceBrief() {
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
     .map(([form, count]) => `${escapeHtml(form)}: ${Number(count)}`)
     .join(' · ') || 'No filing counts available';
+  const sourceTruth = state.metadata.data_source_truth || 'fresh_refresh_dataset';
+  const latestCount = Number(state.metadata.latest_refresh_record_count ?? state.records.length);
+  const truthLabel = sourceTruth === 'preserved_previous_dataset'
+    ? `Loaded dataset was preserved from a prior good refresh; latest refresh produced ${latestCount} records.`
+    : `Loaded dataset comes from the latest successful refresh (${latestCount} records).`;
   els.traceBrief.innerHTML = `<p><strong>${state.records.length}</strong> records loaded across <strong>${Math.max((state.metadata.coverage_lanes || []).length, EXPECTED_LANES.length)}</strong> supported SEC lanes.</p>
     <p>Lookback: <strong>${escapeHtml(state.metadata.lookback_days || 'unknown')}</strong> days · Data mode: <strong>${escapeHtml(state.metadata.data_mode || '-')}</strong></p>
+    <p><strong>Data source truth:</strong> ${escapeHtml(truthLabel)}</p>
     <p>${formText}</p>
     <p class="trace-note">Current coverage is SEC watchlist only, not the full SEC universe.</p>`;
 }
@@ -964,9 +994,9 @@ function createCard(record, expanded = false) {
   const button = node.querySelector('.record-summary');
   const indicator = node.querySelector('.expand-indicator');
 
-  setText(q('.ticker'), record.ticker);
+  setText(q('.ticker'), record.display_label || displayPrimaryLabel(record));
   setText(q('.event-title'), record.event_type);
-  setText(q('.company-line'), record.company);
+  setText(q('.company-line'), record.display_subtitle || displayCompanyLine(record));
   setText(q('.score-pill'), `Score ${record.score}`);
 
   const lanePill = q('.lane-pill');
@@ -1021,8 +1051,8 @@ function createFallbackCard(record) {
   article.innerHTML = `
     <div class="record-summary fallback-summary">
       <div class="summary-main">
-        <div class="summary-topline"><span class="ticker">${escapeHtml(record.ticker || '-')}</span><span class="event-title">${escapeHtml(record.event_type || 'Public Record')}</span></div>
-        <p class="company-line">${escapeHtml(record.company || '-')}</p>
+        <div class="summary-topline"><span class="ticker">${escapeHtml(record.display_label || displayPrimaryLabel(record))}</span><span class="event-title">${escapeHtml(record.event_type || 'Public Record')}</span></div>
+        <p class="company-line">${escapeHtml(record.display_subtitle || displayCompanyLine(record))}</p>
       </div>
       <div class="summary-badges"><span class="lane-pill">${escapeHtml(record.source_group || '-')}</span><span class="filing-pill">${escapeHtml(record.filing_type || '-')}</span><span class="score-pill">Score ${escapeHtml(String(record.score || 0))}</span></div>
     </div>
@@ -1073,7 +1103,7 @@ function renderTable() {
 
   const rows = state.filtered.map((record) => `
     <tr>
-      <td><strong>${escapeHtml(record.ticker)}</strong><div class="table-sub">${escapeHtml(record.company)}</div></td>
+      <td><strong>${escapeHtml(record.display_label || displayPrimaryLabel(record))}</strong><div class="table-sub">${escapeHtml(record.display_subtitle || displayCompanyLine(record))}</div></td>
       <td>${escapeHtml(record.event_type)}<div class="table-sub">${escapeHtml(record.record_type)}</div></td>
       <td>${escapeHtml(record.filing_type || normalizeFilingType(record.source_form || record.source_type))}<div class="table-sub">${escapeHtml(record.source_group)}</div></td>
       <td>${escapeHtml(record.filer)}<div class="table-sub">${escapeHtml(record.source_form)}</div></td>

@@ -384,8 +384,13 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
             total_reported_value = sum((h.get("market_value") or 0) for h in holdings)
             for rank, holding in enumerate(holdings[:MAX_13F_HOLDINGS_PER_MANAGER], start=1):
                 match = match_watchlist_issuer(holding.get("name_of_issuer", ""), issuer_map)
-                ticker = match["ticker"] if match else f"CUSIP {holding.get('cusip') or '-'}"
+                # 13F holdings are often keyed by CUSIP, but CUSIP should not be the
+                # primary display title. If ticker is unmapped, leave ticker blank and
+                # let the UI use issuer/company as the headline while showing CUSIP as
+                # a key figure.
+                ticker = match["ticker"] if match else ""
                 company_name = match["company"] if match else holding.get("name_of_issuer") or "Unknown issuer"
+                display_security = ticker or company_name or f"CUSIP {holding.get('cusip') or '-'}"
                 watchlist_match = bool(match)
                 filed_date = filing.get("filing_date") or ""
                 report_date = filing.get("report_date") or filed_date
@@ -431,7 +436,7 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
                     "position_rank": rank,
                     "position_weight": position_weight,
                     "position_value_label": format_money(market_value),
-                    "value_basis_label": "13F value converted from thousands",
+                    "value_basis_label": holding.get("market_value_unit_basis") or "13F value converted from thousands",
                     "change_vs_prior": "Pending comparison",
                     "score": score,
                     "evidence_grade": grade,
@@ -447,7 +452,7 @@ def collect_13f_records(companies: List[Company], diagnostics: Optional[Dict[str
                     ],
                     "caveat": caveat,
                     "source_url": source_url,
-                    "vital_point": f"13F holding: {manager.name} reported {holding.get('shares'):,} shares of {ticker}, market value {format_money(market_value)}, as of {report_date}." if holding.get("shares") is not None else f"13F holding: {manager.name} reported {ticker}, market value {format_money(market_value)}, as of {report_date}.",
+                    "vital_point": f"13F holding: {manager.name} reported {holding.get('shares'):,} shares of {display_security}, market value {format_money(market_value)}, as of {report_date}." if holding.get("shares") is not None else f"13F holding: {manager.name} reported {display_security}, market value {format_money(market_value)}, as of {report_date}.",
                 })
     if diagnostics is not None:
         diagnostics["records_added"] = len(records)
