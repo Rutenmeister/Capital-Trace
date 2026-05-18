@@ -111,12 +111,16 @@ def main() -> int:
                 warnings.append(f"{rid}: {note}")
             if val is not None and val >= SEVERE_SINGLE_13F_VALUE_USD:
                 severe.append(f"{rid}: 13F single holding value looks suspiciously high after normalization: ${val:,.0f}")
-            raw_thousands = number(rec.get("reported_market_value_thousands"))
+            normalized = val
             explicit_usd = number(rec.get("reported_market_value_usd"))
-            if raw_thousands is not None and explicit_usd is not None and raw_thousands < 2_000_000_000:
-                expected = raw_thousands * 1000
-                if expected and abs(explicit_usd - expected) / expected > 0.02:
-                    severe.append(f"{rid}: 13F USD value does not match raw thousands conversion")
+            if normalized is not None and explicit_usd is not None and normalized > 0:
+                if abs(explicit_usd - normalized) / normalized > 0.02:
+                    warnings.append(f"{rid}: 13F explicit USD differs from implied-price normalized value")
+            shares = number(rec.get("shares"))
+            if val is not None and shares and shares > 0:
+                implied_price = val / shares
+                if implied_price > 100000 or implied_price < 0.05:
+                    severe.append(f"{rid}: 13F implied price remains implausible after normalization: ${implied_price:,.2f}/share")
             if not rec.get("market_value_unit_basis"):
                 warnings.append(f"{rid}: 13F missing market_value_unit_basis; display should fall back but refresh should populate it")
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capital Trace v0.12h master refresh.
+Capital Trace v0.12i master refresh.
 
 Universal SEC filing engine + trust layer:
 - runs SEC lanes sequentially
@@ -8,7 +8,7 @@ Universal SEC filing engine + trust layer:
 - writes diagnostics so the UI can say what was checked, found, or failed
 - commits one combined data/capital_trace.json payload
 
-Supported watchlist lanes in v0.12h:
+Supported watchlist lanes in v0.12i:
 - Form 4 / 4/A insider transactions
 - SC 13D, SC 13D/A, SC 13G, SC 13G/A beneficial ownership records
 - 13F-HR / 13F-HR/A institutional holdings records
@@ -290,7 +290,7 @@ def write_outputs(records: List[Dict[str, Any]], companies: List[Company], diagn
             "latest_refresh_record_count": latest_refresh_record_count,
             "loaded_dataset_record_count": len(records),
             "data_source_truth": "preserved_previous_dataset" if preserved_previous_records else "fresh_refresh_dataset",
-            "methodology_version": "0.12h-source-truth-cusip-display-and-signal-safe-capping",
+            "methodology_version": "0.12i-sp500-sec-pull-implied-price-13f-repair",
             "extraction_summary": extraction_summary(records),
             "output_cap": output_cap,
         },
@@ -335,7 +335,7 @@ def run_lane(name: str, func, companies: List[Company], diag: Dict[str, Any]) ->
 
 def main() -> int:
     companies = load_watchlist()
-    print(f"[INFO] Capital Trace v0.12h source-truth refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
+    print(f"[INFO] Capital Trace v0.12i source-truth refresh: {len(companies)} watchlist companies; lookback={LOOKBACK_DAYS} days")
 
     form4_diag = base_diag(lane="insider", forms=["4", "4/A"])
     ownership_diag = base_diag(lane="ownership", forms=["SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"])

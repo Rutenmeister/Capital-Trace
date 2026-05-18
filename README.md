@@ -1,4 +1,4 @@
-# Capital Trace v0.12h — Source Truth + CUSIP Display Fix
+# Capital Trace v0.12i — Source Truth + CUSIP Display Fix
 
 Capital Trace is an Edgefield Research SEC filing terminal. It converts public SEC records into an evidence-ranked reading queue with source links, caveats, lane diagnostics, extraction quality, and vital-point summaries.
 
@@ -9,7 +9,7 @@ Capital Trace is an Edgefield Research SEC filing terminal. It converts public S
 - SEC 13F-HR / 13F-HR/A institutional holdings
 - SEC Form 144 / 144/A proposed sale notices
 
-## What v0.12h fixes
+## What v0.12i fixes
 
 - Keeps the 13F value-unit repair so 13F values display as actual USD, not 1,000x inflated values.
 - Repairs preserved legacy 13F records before audit when possible.
@@ -49,7 +49,7 @@ If `.github` is hidden, manually update `.github/workflows/refresh-capital-trace
 CAPITAL_TRACE_LOOKBACK_DAYS: "180"
 CAPITAL_TRACE_MAX_FORM4_PER_COMPANY: "100"
 CAPITAL_TRACE_MAX_OUTPUT_RECORDS: "5000"
-CAPITAL_TRACE_USER_AGENT: "CapitalTrace/0.12h rutenmeister@users.noreply.github.com"
+CAPITAL_TRACE_USER_AGENT: "CapitalTrace/0.12i rutenmeister@users.noreply.github.com"
 CAPITAL_TRACE_EMPTY_DATA_GUARD: "true"
 ```
 

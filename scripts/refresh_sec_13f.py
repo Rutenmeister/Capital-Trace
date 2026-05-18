@@ -112,12 +112,13 @@ def normalize_name(value: str) -> str:
 def build_issuer_map(companies: List[Company]) -> List[Dict[str, str]]:
     issuers: List[Dict[str, str]] = []
     for company in companies:
-        name = company.ticker
-        try:
-            payload = company_submissions(company)
-            name = payload.get("name") or payload.get("entityName") or company.ticker
-        except Exception:
-            name = company.ticker
+        name = company.name or company.ticker
+        if not company.name:
+            try:
+                payload = company_submissions(company)
+                name = payload.get("name") or payload.get("entityName") or company.ticker
+            except Exception:
+                name = company.ticker
         issuers.append({
             "ticker": company.ticker,
             "company": name,
@@ -204,14 +205,22 @@ def child_text(node: ET.Element, names: set[str]) -> str:
     return ""
 
 
-def normalize_13f_value(value_raw: str) -> tuple[Optional[int], Optional[int], str]:
-    """Return (reported_value, market_value_usd, basis).
+def _plausible_price(price: Optional[float]) -> bool:
+    if price is None:
+        return False
+    # Broad sanity band. Allows high-priced securities while rejecting obvious
+    # 1,000x unit errors such as $200,000/share for AMZN/NVDA.
+    return 0.05 <= price <= 100_000
 
-    SEC 13F XML information-table <value> fields are normally reported in
-    thousands of dollars. Some parsed source variants or legacy records may
-    already expose a full-dollar value. Capital Trace must never display a
-    1,000x inflated holding, so this normalizer records the basis explicitly
-    and treats extremely large raw values as already-USD.
+
+def normalize_13f_value(value_raw: str, shares: Optional[int] = None) -> tuple[Optional[int], Optional[int], str]:
+    """Return (reported_value_field, market_value_usd, basis).
+
+    SEC 13F values are *usually* reported in thousands of dollars, but EDGAR
+    XML/table variants and legacy Capital Trace preserved data have shown both
+    raw-thousands and already-USD values. The only safe interpretation is to use
+    shares as a sanity check when available: choose the unit treatment that gives
+    a plausible implied price per share.
     """
     if not value_raw:
         return None, None, "missing"
@@ -223,13 +232,22 @@ def normalize_13f_value(value_raw: str) -> tuple[Optional[int], Optional[int], s
     except ValueError:
         return None, None, "unparsed"
 
-    # A raw 13F <value> above 2 billion would imply a >$2T single holding if
-    # interpreted as thousands. In our watchlist context that is almost always
-    # a full-dollar value coming from a parsed table/legacy source, not an SEC
-    # thousands field. Treat it as USD rather than multiplying again.
-    if raw_value >= 2_000_000_000:
-        return raw_value, raw_value, "parsed value treated as USD; not multiplied"
+    if shares and shares > 0:
+        price_if_usd = raw_value / shares
+        price_if_thousands = (raw_value * 1000) / shares
+        usd_plausible = _plausible_price(price_if_usd)
+        thousands_plausible = _plausible_price(price_if_thousands)
+        if usd_plausible and not thousands_plausible:
+            return raw_value, raw_value, "13F value interpreted as USD by implied-price sanity check"
+        if thousands_plausible and not usd_plausible:
+            return raw_value, raw_value * 1000, "SEC 13F value field converted from thousands of dollars"
+        if usd_plausible and thousands_plausible:
+            # Official basis is thousands; prefer it only when both are plausible.
+            return raw_value, raw_value * 1000, "SEC 13F value field converted from thousands of dollars"
 
+    # Fallback without shares: avoid single-holding trillion-dollar displays.
+    if raw_value >= 2_000_000_000:
+        return raw_value, raw_value, "13F value treated as USD because thousands conversion would be implausibly large"
     return raw_value, raw_value * 1000, "SEC 13F value field converted from thousands of dollars"
 
 
@@ -268,11 +286,11 @@ def parse_13f_holdings(xml_text: str) -> List[Dict[str, Any]]:
         shares_raw = child_text(node, {"sshPrnamt"})
         put_call = child_text(node, {"putCall"})
         investment_discretion = child_text(node, {"investmentDiscretion"})
-        reported_value_raw, market_value, value_basis = normalize_13f_value(value_raw)
         try:
             shares = int(float(shares_raw.replace(",", ""))) if shares_raw else None
         except ValueError:
             shares = None
+        reported_value_raw, market_value, value_basis = normalize_13f_value(value_raw, shares)
         if name or cusip:
             rows.append({
                 "name_of_issuer": name,

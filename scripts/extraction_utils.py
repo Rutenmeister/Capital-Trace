@@ -49,49 +49,62 @@ def fmt_money(value: Any) -> str:
 
 
 
+def _plausible_implied_price(value: float, shares: Optional[float]) -> bool:
+    if shares is None or shares <= 0 or value is None or value <= 0:
+        return False
+    price = value / shares
+    return 0.05 <= price <= 100_000
+
+
 def normalize_13f_market_value(record: Dict[str, Any]) -> tuple[Any, List[str]]:
     """Return the best 13F USD market value plus integrity notes.
 
-    SEC 13F information-table <value> fields are reported in thousands of
-    dollars. Older Capital Trace JSON may contain one or more already-inflated
-    fields, so this function uses multiple candidates and normalizes obvious
-    1,000x errors down before display/audit.
+    Uses implied price per share to repair both fresh and preserved legacy 13F
+    records. This prevents two opposite errors:
+    - treating a USD table value as thousands and inflating by 1,000x;
+    - treating a true SEC-thousands value as USD and shrinking by 1,000x.
     """
     notes: List[str] = []
     severe_single_holding = 2_000_000_000_000  # $2T for one security is a hard red flag here.
+    shares = num(record.get("shares"))
 
-    candidates: List[float] = []
-
+    candidates: List[tuple[float, str]] = []
     raw_thousands = num(record.get("reported_market_value_thousands"))
-    if raw_thousands is not None:
-        # Normal SEC value: thousands -> USD. If an old record stored USD in this
-        # field, using the smaller plausible candidate avoids a second multiply.
-        if raw_thousands >= severe_single_holding:
-            candidates.append(raw_thousands / 1000)
-            notes.append("13F raw-thousands field looked double-scaled; normalized down by 1,000.")
-        elif raw_thousands >= 2_000_000_000:
-            candidates.append(raw_thousands)
-            notes.append("13F raw-thousands field looked already USD-scaled; treated as USD.")
-        else:
-            candidates.append(raw_thousands * 1000)
+    if raw_thousands is not None and raw_thousands > 0:
+        candidates.append((raw_thousands, "reported value treated as USD by implied-price sanity check"))
+        candidates.append((raw_thousands * 1000, "SEC 13F value field converted from thousands of dollars"))
 
     for key in ["reported_market_value_usd", "market_value", "transaction_value"]:
         value = num(record.get(key))
-        if value is None:
+        if value is None or value <= 0:
             continue
         while value >= severe_single_holding:
             value = value / 1000
             notes.append(f"13F {key} looked double-scaled; normalized down by 1,000.")
-        candidates.append(value)
+        candidates.append((value, f"{key} used as USD"))
 
-    valid = [c for c in candidates if c is not None and c > 0]
-    if not valid:
+    if not candidates:
         return None, notes
 
-    # Use the smallest plausible value. In legacy broken records, the inflated
-    # value and corrected value often coexist; the inflated value is never the
-    # vital point we want to show.
-    return min(valid), notes
+    if shares and shares > 0:
+        plausible = [(v, label) for v, label in candidates if _plausible_implied_price(v, shares)]
+        if plausible:
+            # Prefer the largest plausible value. This picks $20.47B for Berkshire/AAPL
+            # over the shrunken $20.47M, while rejecting impossible $914B AMZN-style
+            # values when the USD interpretation is $914M.
+            best, label = max(plausible, key=lambda item: item[0])
+            if "treated as USD" in label:
+                notes.append("13F value treated as USD after implied-price sanity check.")
+            elif "converted from thousands" in label:
+                notes.append("13F value converted from SEC thousands after implied-price sanity check.")
+            return best, notes
+
+    # Without shares, choose a conservative non-trillion candidate.
+    non_severe = [(v, label) for v, label in candidates if v < severe_single_holding]
+    if non_severe:
+        return min(non_severe, key=lambda item: item[0])[0], notes
+    best = min(candidates, key=lambda item: item[0])[0]
+    return best, notes
 
 
 def repair_13f_record(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -110,9 +123,9 @@ def repair_13f_record(record: Dict[str, Any]) -> Dict[str, Any]:
         r["transaction_value"] = usd_int
         # Keep a clean derived thousands field for transparency.
         r["reported_market_value_thousands"] = int(round(usd_int / 1000))
-        r["market_value_unit_basis"] = r.get("market_value_unit_basis") or "SEC 13F value field converted from thousands of dollars; legacy values normalized when necessary"
+        r["market_value_unit_basis"] = "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source"
         r["position_value_label"] = fmt_money(usd_int)
-        r["value_basis_label"] = "13F value converted from thousands to USD"
+        r["value_basis_label"] = "13F value normalized by implied-price sanity check"
 
     # Rebuild stale UI-derived text/quality if a previous version wrote bad values.
     for field in ["vital_point", "key_figures", "person_entity", "source_trust", "extraction_quality"]:

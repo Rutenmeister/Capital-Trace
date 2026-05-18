@@ -23,6 +23,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import html
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,6 +33,8 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 WATCHLIST_PATH = DATA_DIR / "watchlist.json"
+CONFIG_DIR = ROOT / "config"
+SP500_WATCHLIST_PATH = CONFIG_DIR / "sp500_watchlist.json"
 OUTPUT_JSON = DATA_DIR / "capital_trace.json"
 OUTPUT_JS = DATA_DIR / "capital_trace_data.js"
 
@@ -43,12 +46,16 @@ MAX_OUTPUT_RECORDS = int(os.environ.get("CAPITAL_TRACE_MAX_OUTPUT_RECORDS", "500
 
 SEC_DATA = "https://data.sec.gov"
 SEC_ARCHIVES = "https://www.sec.gov/Archives/edgar/data"
+SEC_COMPANY_TICKERS_JSON = "https://www.sec.gov/files/company_tickers.json"
+WIKIPEDIA_SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+SEC_GET_CACHE: Dict[str, Any] = {}
 
 
 @dataclass
 class Company:
     ticker: str
     cik: str
+    name: str = ""
 
     @property
     def cik10(self) -> str:
@@ -84,6 +91,9 @@ def parse_date(value: str | None) -> Optional[datetime]:
 
 
 def sec_get(url: str, *, as_json: bool = False) -> Any:
+    cache_key = f"json:{url}" if as_json else f"text:{url}"
+    if cache_key in SEC_GET_CACHE:
+        return SEC_GET_CACHE[cache_key]
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "application/json,text/xml,application/xml,text/html,*/*",
@@ -95,7 +105,10 @@ def sec_get(url: str, *, as_json: bool = False) -> Any:
             raw = resp.read()
             text = raw.decode("utf-8", errors="replace")
             if as_json:
-                return json.loads(text)
+                parsed = json.loads(text)
+                SEC_GET_CACHE[cache_key] = parsed
+                return parsed
+            SEC_GET_CACHE[cache_key] = text
             return text
     except urllib.error.HTTPError as exc:
         print(f"[WARN] SEC HTTP {exc.code}: {url}", file=sys.stderr)
@@ -105,16 +118,71 @@ def sec_get(url: str, *, as_json: bool = False) -> Any:
         return None
 
 
-def load_watchlist() -> List[Company]:
-    if not WATCHLIST_PATH.exists():
-        raise FileNotFoundError(f"Missing {WATCHLIST_PATH}")
-    raw = json.loads(WATCHLIST_PATH.read_text(encoding="utf-8"))
+def _clean_html_cell(value: str) -> str:
+    text = re.sub(r"<[^>]+>", "", value or "")
+    text = html.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _normalize_ticker_symbol(symbol: str) -> str:
+    # Keep dot tickers human-readable in the UI. SEC CIK mapping is CIK-based after resolution.
+    return str(symbol or "").strip().upper().replace("/", ".")
+
+
+def fetch_sp500_watchlist() -> List[Company]:
+    """Fetch the current S&P 500 table and return issuer CIKs.
+
+    This avoids maintaining a stale 500-name JSON by hand. The Wikipedia table
+    includes ticker, security name, and CIK; if the table shape changes, we fall
+    back to config/sp500_watchlist.json or data/watchlist.json.
+    """
+    text = sec_get(WIKIPEDIA_SP500_URL, as_json=False)
+    if not text:
+        return []
+    companies: List[Company] = []
+    seen: set[str] = set()
+    for row in re.findall(r"<tr[^>]*>([\s\S]*?)</tr>", text, flags=re.I):
+        cells = re.findall(r"<td[^>]*>([\s\S]*?)</td>", row, flags=re.I)
+        if len(cells) < 7:
+            continue
+        ticker = _normalize_ticker_symbol(_clean_html_cell(cells[0]))
+        name = _clean_html_cell(cells[1])
+        cik = re.sub(r"\D", "", _clean_html_cell(cells[6]))
+        if not ticker or not cik:
+            continue
+        key = cik.zfill(10)
+        if key in seen:
+            continue
+        seen.add(key)
+        companies.append(Company(ticker=ticker, cik=key, name=name))
+    if len(companies) < 400:
+        print(f"[WARN] S&P 500 fetch returned only {len(companies)} companies; falling back to local watchlist", file=sys.stderr)
+        return []
+    return companies
+
+
+def load_watchlist_from_path(path: Path) -> List[Company]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
     companies: List[Company] = []
     for item in raw:
         if not item.get("ticker") or not item.get("cik"):
             continue
-        companies.append(Company(ticker=str(item["ticker"]).upper(), cik=str(item["cik"])))
+        companies.append(Company(ticker=str(item["ticker"]).upper(), cik=str(item["cik"]), name=str(item.get("name") or item.get("company") or "")))
     return companies
+
+
+def load_watchlist() -> List[Company]:
+    mode = os.environ.get("CAPITAL_TRACE_ISSUER_WATCHLIST_MODE", "file").strip().lower()
+    if mode in {"sp500", "s&p500", "s_and_p_500"}:
+        companies = fetch_sp500_watchlist()
+        if companies:
+            print(f"[OK] issuer watchlist mode=sp500 companies={len(companies)}", file=sys.stderr)
+            return companies
+        if SP500_WATCHLIST_PATH.exists():
+            return load_watchlist_from_path(SP500_WATCHLIST_PATH)
+    if not WATCHLIST_PATH.exists():
+        raise FileNotFoundError(f"Missing {WATCHLIST_PATH}")
+    return load_watchlist_from_path(WATCHLIST_PATH)
 
 
 def company_submissions(company: Company) -> Dict[str, Any]:
