@@ -1,0 +1,12 @@
+[
+  { "ticker": "NVDA", "cik": "0001045810" },
+  { "ticker": "TSLA", "cik": "0001318605" },
+  { "ticker": "AAPL", "cik": "0000320193" },
+  { "ticker": "MSFT", "cik": "0000789019" },
+  { "ticker": "META", "cik": "0001326801" },
+  { "ticker": "AMZN", "cik": "0001018724" },
+  { "ticker": "GOOGL", "cik": "0001652044" },
+  { "ticker": "AMD", "cik": "0000002488" },
+  { "ticker": "PLTR", "cik": "0001321655" },
+  { "ticker": "BRK.B", "cik": "0001067983" }
+]
