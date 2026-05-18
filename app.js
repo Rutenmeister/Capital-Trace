@@ -1,6 +1,6 @@
 const DASHBOARD_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const EXTRACTION_ORDER = ['complete', 'partial', 'minimal', 'failed'];
-const EVIDENCE_QUEUE_DISPLAY_LIMIT = 20;
+const EVIDENCE_QUEUE_DISPLAY_LIMIT = 25;
 
 const EXPECTED_LANES = [
   {
