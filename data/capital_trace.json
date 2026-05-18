@@ -1,7 +1,7 @@
 {
   "schema_version": "0.12j",
   "data_mode": "sec-watchlist-multilane",
-  "generated_at": "2026-05-18T19:29:21Z",
+  "generated_at": "2026-05-18T19:30:01Z",
   "lookback_days": 180,
   "records_count": 650,
   "lane_count": 4,
@@ -89,9 +89,9 @@
     "data_mode": "sec-watchlist-multilane",
     "source_pipeline": "sec-universal-watchlist-template",
     "refresh_frequency": "tiered",
-    "last_refreshed": "2026-05-18T19:29:21Z",
-    "last_data_update": "2026-05-18T19:29:21Z",
-    "last_sec_check": "2026-05-18T19:29:21Z",
+    "last_refreshed": "2026-05-18T19:30:01Z",
+    "last_data_update": "2026-05-18T19:30:01Z",
+    "last_sec_check": "2026-05-18T19:30:01Z",
     "next_scheduled_check": "2026-05-18T20:00:00Z",
     "source_groups": [
       "SEC Insider Ownership",
@@ -104,7 +104,7 @@
       "SEC 13F Institutional Holdings",
       "SEC Form 144 Proposed Sales"
     ],
-    "watchlist_count": 75,
+    "watchlist_count": 10,
     "record_count": 650,
     "records_count": 650,
     "lane_count": 4,
@@ -134,16 +134,16 @@
     "preserved_previous_records": true,
     "merged_previous_records": false,
     "fresh_record_count_before_merge": 0,
-    "refresh_scope": "broad",
+    "refresh_scope": "core",
     "sec_request_stats": {
-      "requests_attempted": 11,
+      "requests_attempted": 10,
       "http_403_count": 10,
       "circuit_open": true,
       "max_403_errors": 10,
-      "request_delay_seconds": 0.75
+      "request_delay_seconds": 0.6
     },
     "refresh_guard": {
-      "new_record_count": 650,
+      "new_record_count": 0,
       "previous_record_count": 650,
       "lane_record_counts": {
         "insider_form4": 0,
@@ -152,14 +152,14 @@
         "proposed_sales_144": 0
       },
       "all_lanes_zero": true,
-      "suspicious_drop": false,
+      "suspicious_drop": true,
       "preserved_previous_records": true,
       "preserved": true,
       "preservation_reason": "new refresh returned zero/near-zero records or all lanes zero; preserved previous live records"
     },
     "latest_refresh_diagnostics": {
       "insider_form4": {
-        "status": "failed",
+        "status": "checked_no_records",
         "lane": "insider",
         "forms_checked": [
           "4",
@@ -170,10 +170,8 @@
         "filings_seen": 0,
         "filings_matched": 0,
         "records_added": 0,
-        "errors": [
-          "SEC circuit breaker opened; Form 4 lane stopped early to avoid further 403s."
-        ],
-        "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available."
+        "errors": [],
+        "note": "Lane completed and found no matching filings in the current watchlist/lookback window."
       },
       "ownership_13d_13g": {
         "status": "failed",
@@ -220,7 +218,7 @@
           "144",
           "144/A"
         ],
-        "companies_checked": 75,
+        "companies_checked": 10,
         "lookback_days": 180,
         "filings_seen": 0,
         "filings_matched": 0,
@@ -252,7 +250,7 @@
   },
   "latest_refresh_diagnostics": {
     "insider_form4": {
-      "status": "failed",
+      "status": "checked_no_records",
       "lane": "insider",
       "forms_checked": [
         "4",
@@ -263,10 +261,8 @@
       "filings_seen": 0,
       "filings_matched": 0,
       "records_added": 0,
-      "errors": [
-        "SEC circuit breaker opened; Form 4 lane stopped early to avoid further 403s."
-      ],
-      "note": "Lane failed or produced no records because of errors. Existing records should be preserved if available."
+      "errors": [],
+      "note": "Lane completed and found no matching filings in the current watchlist/lookback window."
     },
     "ownership_13d_13g": {
       "status": "failed",
@@ -313,7 +309,7 @@
         "144",
         "144/A"
       ],
-      "companies_checked": 75,
+      "companies_checked": 10,
       "lookback_days": 180,
       "filings_seen": 0,
       "filings_matched": 0,
@@ -572,8 +568,8 @@
       "transaction_code": "",
       "shares": 4388711,
       "price": null,
-      "transaction_value": 914036840,
-      "market_value": 914036840,
+      "transaction_value": 914037000,
+      "market_value": 914037000,
       "cusip": "023135106",
       "position_rank": 3,
       "position_weight": 4.079693427009495,
@@ -599,12 +595,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 914036840,
+      "reported_market_value_usd": 914037000,
       "reported_market_value_thousands": 914037,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 4,388,711 shares of AMZN, market value $914.04M, as of 2026-03-31.",
       "key_figures": {
@@ -678,8 +674,8 @@
       "transaction_code": "",
       "shares": 4693003,
       "price": null,
-      "transaction_value": 818459723,
-      "market_value": 818459723,
+      "transaction_value": 818460000,
+      "market_value": 818460000,
       "cusip": "67066G104",
       "position_rank": 4,
       "position_weight": 3.653096468403956,
@@ -705,12 +701,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 818459723,
+      "reported_market_value_usd": 818460000,
       "reported_market_value_thousands": 818460,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 4,693,003 shares of NVDA, market value $818.46M, as of 2026-03-31.",
       "key_figures": {
@@ -889,8 +885,8 @@
       "transaction_code": "",
       "shares": 1084979,
       "price": null,
-      "transaction_value": 401626676,
-      "market_value": 401626676,
+      "transaction_value": 401627000,
+      "market_value": 401627000,
       "cusip": "594918104",
       "position_rank": 8,
       "position_weight": 1.7926123307993493,
@@ -916,12 +912,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 401626676,
+      "reported_market_value_usd": 401627000,
       "reported_market_value_thousands": 401627,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,084,979 shares of MSFT, market value $401.63M, as of 2026-03-31.",
       "key_figures": {
@@ -1312,8 +1308,8 @@
       "transaction_code": "",
       "shares": 311726,
       "price": null,
-      "transaction_value": 89421720,
-      "market_value": 89421720,
+      "transaction_value": 89422000,
+      "market_value": 89422000,
       "cusip": "02079K107",
       "position_rank": 9,
       "position_weight": 0.6520327024078915,
@@ -1339,12 +1335,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1336528/000117266126002336/infotable.xml",
-      "reported_market_value_usd": 89421720,
+      "reported_market_value_usd": 89422000,
       "reported_market_value_thousands": 89422,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Pershing Square Capital Management LP reported 311,726 shares of GOOGL, market value $89.42M, as of 2026-03-31.",
       "key_figures": {
@@ -1733,8 +1729,8 @@
       "transaction_code": "",
       "shares": 2831329,
       "price": null,
-      "transaction_value": 1052546690,
-      "market_value": 1052546690,
+      "transaction_value": 1052547000,
+      "market_value": 1052547000,
       "cusip": "88160R101",
       "position_rank": 1,
       "position_weight": 8.18498292147377,
@@ -1760,12 +1756,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926059240/infotable.xml",
-      "reported_market_value_usd": 1052546690,
+      "reported_market_value_usd": 1052547000,
       "reported_market_value_thousands": 1052547,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 2,831,329 shares of TSLA, market value $1.05B, as of 2026-03-31.",
       "key_figures": {
@@ -1839,8 +1835,8 @@
       "transaction_code": "",
       "shares": 2712854,
       "price": null,
-      "transaction_value": 551875889,
-      "market_value": 551875889,
+      "transaction_value": 551876000,
+      "market_value": 551876000,
       "cusip": "007903107",
       "position_rank": 2,
       "position_weight": 4.291586082740096,
@@ -1866,12 +1862,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926059240/infotable.xml",
-      "reported_market_value_usd": 551875889,
+      "reported_market_value_usd": 551876000,
       "reported_market_value_thousands": 551876,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 2,712,854 shares of AMD, market value $551.88M, as of 2026-03-31.",
       "key_figures": {
@@ -2262,8 +2258,8 @@
       "transaction_code": "",
       "shares": 6163871,
       "price": null,
-      "transaction_value": 1934222720,
-      "market_value": 1934222720,
+      "transaction_value": 1934223000,
+      "market_value": 1934223000,
       "cusip": "02079K107",
       "position_rank": 4,
       "position_weight": 12.45736705717316,
@@ -2289,12 +2285,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1336528/000117266126001091/infotable.xml",
-      "reported_market_value_usd": 1934222720,
+      "reported_market_value_usd": 1934223000,
       "reported_market_value_thousands": 1934223,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Pershing Square Capital Management LP reported 6,163,871 shares of GOOGL, market value $1.93B, as of 2025-12-31.",
       "key_figures": {
@@ -2473,8 +2469,8 @@
       "transaction_code": "",
       "shares": 678297,
       "price": null,
-      "transaction_value": 212306961,
-      "market_value": 212306961,
+      "transaction_value": 212307000,
+      "market_value": 212307000,
       "cusip": "02079K305",
       "position_rank": 9,
       "position_weight": 1.3673636001804108,
@@ -2500,12 +2496,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1336528/000117266126001091/infotable.xml",
-      "reported_market_value_usd": 212306961,
+      "reported_market_value_usd": 212307000,
       "reported_market_value_thousands": 212307,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Pershing Square Capital Management LP reported 678,297 shares of GOOGL, market value $212.31M, as of 2025-12-31.",
       "key_figures": {
@@ -2579,8 +2575,8 @@
       "transaction_code": "",
       "shares": 1292767,
       "price": null,
-      "transaction_value": 262987591,
-      "market_value": 262987591,
+      "transaction_value": 262988000,
+      "market_value": 262988000,
       "cusip": "007903107",
       "position_rank": 12,
       "position_weight": 1.1738134607219568,
@@ -2605,12 +2601,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 262987591,
+      "reported_market_value_usd": 262988000,
       "reported_market_value_thousands": 262988,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,292,767 shares of AMD, market value $262.99M, as of 2026-03-31.",
       "key_figures": {
@@ -2788,8 +2784,8 @@
       "transaction_code": "",
       "shares": 563492,
       "price": null,
-      "transaction_value": 143008635,
-      "market_value": 143008635,
+      "transaction_value": 143009000,
+      "market_value": 143009000,
       "cusip": "037833100",
       "position_rank": 24,
       "position_weight": 0.6383018306079435,
@@ -2814,12 +2810,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 143008635,
+      "reported_market_value_usd": 143009000,
       "reported_market_value_thousands": 143009,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 563,492 shares of AAPL, market value $143.01M, as of 2026-03-31.",
       "key_figures": {
@@ -3318,8 +3314,8 @@
       "transaction_code": "",
       "shares": 1355283,
       "price": null,
-      "transaction_value": 282264888,
-      "market_value": 282264888,
+      "transaction_value": 282265000,
+      "market_value": 282265000,
       "cusip": "023135106",
       "position_rank": 15,
       "position_weight": 2.1949936373955126,
@@ -3344,12 +3340,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926059240/infotable.xml",
-      "reported_market_value_usd": 282264888,
+      "reported_market_value_usd": 282265000,
       "reported_market_value_thousands": 282265,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 1,355,283 shares of AMZN, market value $282.26M, as of 2026-03-31.",
       "key_figures": {
@@ -4557,8 +4553,8 @@
       "transaction_code": "",
       "shares": 1475704,
       "price": null,
-      "transaction_value": 498551839,
-      "market_value": 498551839,
+      "transaction_value": 498552000,
+      "market_value": 498552000,
       "cusip": "595112103",
       "position_rank": 7,
       "position_weight": 2.2252261304826577,
@@ -4583,12 +4579,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 498551839,
+      "reported_market_value_usd": 498552000,
       "reported_market_value_thousands": 498552,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,475,704 shares of CUSIP 595112103, market value $498.55M, as of 2026-03-31.",
       "key_figures": {
@@ -4662,8 +4658,8 @@
       "transaction_code": "",
       "shares": 434897,
       "price": null,
-      "transaction_value": 379621591,
-      "market_value": 379621591,
+      "transaction_value": 379622000,
+      "market_value": 379622000,
       "cusip": "36828A101",
       "position_rank": 9,
       "position_weight": 1.694395282310051,
@@ -4688,12 +4684,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 379621591,
+      "reported_market_value_usd": 379622000,
       "reported_market_value_thousands": 379622,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 434,897 shares of CUSIP 36828A101, market value $379.62M, as of 2026-03-31.",
       "key_figures": {
@@ -4767,8 +4763,8 @@
       "transaction_code": "",
       "shares": 1077079,
       "price": null,
-      "transaction_value": 363998848,
-      "market_value": 363998848,
+      "transaction_value": 363999000,
+      "market_value": 363999000,
       "cusip": "874039100",
       "position_rank": 10,
       "position_weight": 1.6246650491949848,
@@ -4793,12 +4789,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 363998848,
+      "reported_market_value_usd": 363999000,
       "reported_market_value_thousands": 363999,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,077,079 shares of CUSIP 874039100, market value $364.00M, as of 2026-03-31.",
       "key_figures": {
@@ -5502,8 +5498,8 @@
       "transaction_code": "",
       "shares": 1787019,
       "price": null,
-      "transaction_value": 1059666527,
-      "market_value": 1059666527,
+      "transaction_value": 1059667000,
+      "market_value": 1059667000,
       "cusip": "91307C102",
       "position_rank": 1,
       "position_weight": 1.657544658778827,
@@ -5528,12 +5524,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000033/renaissance13Fq12026_holding.xml",
-      "reported_market_value_usd": 1059666527,
+      "reported_market_value_usd": 1059667000,
       "reported_market_value_thousands": 1059667,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 1,787,019 shares of CUSIP 91307C102, market value $1.06B, as of 2026-03-31.",
       "key_figures": {
@@ -5816,8 +5812,8 @@
       "transaction_code": "",
       "shares": 2818151,
       "price": null,
-      "transaction_value": 699915982,
-      "market_value": 699915982,
+      "transaction_value": 699916000,
+      "market_value": 699916000,
       "cusip": "92343E102",
       "position_rank": 6,
       "position_weight": 1.0948180092490905,
@@ -5842,12 +5838,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000033/renaissance13Fq12026_holding.xml",
-      "reported_market_value_usd": 699915982,
+      "reported_market_value_usd": 699916000,
       "reported_market_value_thousands": 699916,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 2,818,151 shares of CUSIP 92343E102, market value $699.92M, as of 2026-03-31.",
       "key_figures": {
@@ -6026,8 +6022,8 @@
       "transaction_code": "",
       "shares": 2218918,
       "price": null,
-      "transaction_value": 548183692,
-      "market_value": 548183692,
+      "transaction_value": 548184000,
+      "market_value": 548184000,
       "cusip": "351858105",
       "position_rank": 8,
       "position_weight": 0.8574763168906416,
@@ -6052,12 +6048,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000033/renaissance13Fq12026_holding.xml",
-      "reported_market_value_usd": 548183692,
+      "reported_market_value_usd": 548184000,
       "reported_market_value_thousands": 548184,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 2,218,918 shares of CUSIP 351858105, market value $548.18M, as of 2026-03-31.",
       "key_figures": {
@@ -6131,8 +6127,8 @@
       "transaction_code": "",
       "shares": 799568,
       "price": null,
-      "transaction_value": 507997533,
-      "market_value": 507997533,
+      "transaction_value": 507998000,
+      "market_value": 507998000,
       "cusip": "80004C200",
       "position_rank": 9,
       "position_weight": 0.794616585541133,
@@ -6157,12 +6153,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000033/renaissance13Fq12026_holding.xml",
-      "reported_market_value_usd": 507997533,
+      "reported_market_value_usd": 507998000,
       "reported_market_value_thousands": 507998,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 799,568 shares of CUSIP 80004C200, market value $508.00M, as of 2026-03-31.",
       "key_figures": {
@@ -6864,8 +6860,8 @@
       "transaction_code": "",
       "shares": 1245122,
       "price": null,
-      "transaction_value": 369128978,
-      "market_value": 369128978,
+      "transaction_value": 369129000,
+      "market_value": 369129000,
       "cusip": "880770102",
       "position_rank": 10,
       "position_weight": 2.870480150149983,
@@ -6890,12 +6886,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926059240/infotable.xml",
-      "reported_market_value_usd": 369128978,
+      "reported_market_value_usd": 369129000,
       "reported_market_value_thousands": 369129,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 1,245,122 shares of CUSIP 880770102, market value $369.13M, as of 2026-03-31.",
       "key_figures": {
@@ -7502,8 +7498,8 @@
       "transaction_code": "",
       "shares": 3865205,
       "price": null,
-      "transaction_value": 720860733,
-      "market_value": 720860733,
+      "transaction_value": 720861000,
+      "market_value": 720861000,
       "cusip": "67066G104",
       "position_rank": 3,
       "position_weight": 2.628804918153134,
@@ -7529,12 +7525,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 720860733,
+      "reported_market_value_usd": 720861000,
       "reported_market_value_thousands": 720861,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 3,865,205 shares of NVDA, market value $720.86M, as of 2025-12-31.",
       "key_figures": {
@@ -7608,8 +7604,8 @@
       "transaction_code": "",
       "shares": 1590826,
       "price": null,
-      "transaction_value": 497928538,
-      "market_value": 497928538,
+      "transaction_value": 497929000,
+      "market_value": 497929000,
       "cusip": "02079K305",
       "position_rank": 6,
       "position_weight": 1.8158250680900934,
@@ -7635,12 +7631,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 497928538,
+      "reported_market_value_usd": 497929000,
       "reported_market_value_thousands": 497929,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,590,826 shares of GOOGL, market value $497.93M, as of 2025-12-31.",
       "key_figures": {
@@ -7819,8 +7815,8 @@
       "transaction_code": "",
       "shares": 1948254,
       "price": null,
-      "transaction_value": 449695988,
-      "market_value": 449695988,
+      "transaction_value": 449696000,
+      "market_value": 449696000,
       "cusip": "023135106",
       "position_rank": 8,
       "position_weight": 1.6399326122375053,
@@ -7846,12 +7842,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 449695988,
+      "reported_market_value_usd": 449696000,
       "reported_market_value_thousands": 449696,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,948,254 shares of AMZN, market value $449.70M, as of 2025-12-31.",
       "key_figures": {
@@ -8345,8 +8341,8 @@
       "transaction_code": "",
       "shares": 2574779,
       "price": null,
-      "transaction_value": 551414664,
-      "market_value": 551414664,
+      "transaction_value": 551415000,
+      "market_value": 551415000,
       "cusip": "007903107",
       "position_rank": 7,
       "position_weight": 3.659647367195234,
@@ -8372,12 +8368,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926013538/infotable.xml",
-      "reported_market_value_usd": 551414664,
+      "reported_market_value_usd": 551415000,
       "reported_market_value_thousands": 551415,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 2,574,779 shares of AMD, market value $551.41M, as of 2025-12-31.",
       "key_figures": {
@@ -9693,8 +9689,8 @@
       "transaction_code": "",
       "shares": 3028664,
       "price": null,
-      "transaction_value": 869983734,
-      "market_value": 869983734,
+      "transaction_value": 869984000,
+      "market_value": 869984000,
       "cusip": "43300A203",
       "position_rank": 8,
       "position_weight": 5.603132770670845,
@@ -9719,12 +9715,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1336528/000117266126001091/infotable.xml",
-      "reported_market_value_usd": 869983734,
+      "reported_market_value_usd": 869984000,
       "reported_market_value_thousands": 869984,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Pershing Square Capital Management LP reported 3,028,664 shares of CUSIP 43300A203, market value $869.98M, as of 2025-12-31.",
       "key_figures": {
@@ -12389,8 +12385,8 @@
       "transaction_code": "",
       "shares": 1571229,
       "price": null,
-      "transaction_value": 335708788,
-      "market_value": 335708788,
+      "transaction_value": 335709000,
+      "market_value": 335709000,
       "cusip": "512807306",
       "position_rank": 11,
       "position_weight": 1.4983957712174096,
@@ -12414,12 +12410,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 335708788,
+      "reported_market_value_usd": 335709000,
       "reported_market_value_thousands": 335709,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,571,229 shares of CUSIP 512807306, market value $335.71M, as of 2026-03-31.",
       "key_figures": {
@@ -13112,8 +13108,8 @@
       "transaction_code": "",
       "shares": 1330091,
       "price": null,
-      "transaction_value": 163308573,
-      "market_value": 163308573,
+      "transaction_value": 163309000,
+      "market_value": 163309000,
       "cusip": "040413205",
       "position_rank": 20,
       "position_weight": 0.7289081606846397,
@@ -13137,12 +13133,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 163308573,
+      "reported_market_value_usd": 163309000,
       "reported_market_value_thousands": 163309,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,330,091 shares of CUSIP 040413205, market value $163.31M, as of 2026-03-31.",
       "key_figures": {
@@ -13216,8 +13212,8 @@
       "transaction_code": "",
       "shares": 108674,
       "price": null,
-      "transaction_value": 160012684,
-      "market_value": 160012684,
+      "transaction_value": 160013000,
+      "market_value": 160013000,
       "cusip": "482480100",
       "position_rank": 21,
       "position_weight": 0.7141973568077928,
@@ -13241,12 +13237,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 160012684,
+      "reported_market_value_usd": 160013000,
       "reported_market_value_thousands": 160013,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 108,674 shares of CUSIP 482480100, market value $160.01M, as of 2026-03-31.",
       "key_figures": {
@@ -13320,8 +13316,8 @@
       "transaction_code": "",
       "shares": 525621,
       "price": null,
-      "transaction_value": 148056923,
-      "market_value": 148056923,
+      "transaction_value": 148057000,
+      "market_value": 148057000,
       "cusip": "15101Q207",
       "position_rank": 22,
       "position_weight": 0.6608342565124081,
@@ -13345,12 +13341,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000002/infotable.xml",
-      "reported_market_value_usd": 148056923,
+      "reported_market_value_usd": 148057000,
       "reported_market_value_thousands": 148057,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 525,621 shares of CUSIP 15101Q207, market value $148.06M, as of 2026-03-31.",
       "key_figures": {
@@ -14156,8 +14152,8 @@
       "transaction_code": "",
       "shares": 1201218,
       "price": null,
-      "transaction_value": 377638915,
-      "market_value": 377638915,
+      "transaction_value": 377639000,
+      "market_value": 377639000,
       "cusip": "146869102",
       "position_rank": 13,
       "position_weight": 0.5907078788997941,
@@ -14181,12 +14177,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000033/renaissance13Fq12026_holding.xml",
-      "reported_market_value_usd": 377638915,
+      "reported_market_value_usd": 377639000,
       "reported_market_value_thousands": 377639,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 1,201,218 shares of CUSIP 146869102, market value $377.64M, as of 2026-03-31.",
       "key_figures": {
@@ -15088,8 +15084,8 @@
       "transaction_code": "",
       "shares": 629820,
       "price": null,
-      "transaction_value": 312239563,
-      "market_value": 312239563,
+      "transaction_value": 312240000,
+      "market_value": 312240000,
       "cusip": "G54950103",
       "position_rank": 22,
       "position_weight": 0.4884093313538109,
@@ -15113,12 +15109,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000033/renaissance13Fq12026_holding.xml",
-      "reported_market_value_usd": 312239563,
+      "reported_market_value_usd": 312240000,
       "reported_market_value_thousands": 312240,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 629,820 shares of CUSIP G54950103, market value $312.24M, as of 2026-03-31.",
       "key_figures": {
@@ -15192,8 +15188,8 @@
       "transaction_code": "",
       "shares": 1146133,
       "price": null,
-      "transaction_value": 310017515,
-      "market_value": 310017515,
+      "transaction_value": 310018000,
+      "market_value": 310018000,
       "cusip": "958102105",
       "position_rank": 23,
       "position_weight": 0.48493357393380687,
@@ -15217,12 +15213,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000033/renaissance13Fq12026_holding.xml",
-      "reported_market_value_usd": 310017515,
+      "reported_market_value_usd": 310018000,
       "reported_market_value_thousands": 310018,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 1,146,133 shares of CUSIP 958102105, market value $310.02M, as of 2026-03-31.",
       "key_figures": {
@@ -15399,8 +15395,8 @@
       "transaction_code": "",
       "shares": 2152528,
       "price": null,
-      "transaction_value": 299997827,
-      "market_value": 299997827,
+      "transaction_value": 299998000,
+      "market_value": 299998000,
       "cusip": "375558103",
       "position_rank": 25,
       "position_weight": 0.46926064296556247,
@@ -15424,12 +15420,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000033/renaissance13Fq12026_holding.xml",
-      "reported_market_value_usd": 299997827,
+      "reported_market_value_usd": 299998000,
       "reported_market_value_thousands": 299998,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 2,152,528 shares of CUSIP 375558103, market value $300.00M, as of 2026-03-31.",
       "key_figures": {
@@ -16231,8 +16227,8 @@
       "transaction_code": "",
       "shares": 399074,
       "price": null,
-      "transaction_value": 224798576,
-      "market_value": 224798576,
+      "transaction_value": 224799000,
+      "market_value": 224799000,
       "cusip": "244199105",
       "position_rank": 19,
       "position_weight": 1.74811485591354,
@@ -16256,12 +16252,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926059240/infotable.xml",
-      "reported_market_value_usd": 224798576,
+      "reported_market_value_usd": 224799000,
       "reported_market_value_thousands": 224799,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 399,074 shares of CUSIP 244199105, market value $224.80M, as of 2026-03-31.",
       "key_figures": {
@@ -16335,8 +16331,8 @@
       "transaction_code": "",
       "shares": 627704,
       "price": null,
-      "transaction_value": 212132567,
-      "market_value": 212132567,
+      "transaction_value": 212133000,
+      "market_value": 212133000,
       "cusip": "874039100",
       "position_rank": 20,
       "position_weight": 1.6496193988158288,
@@ -16360,12 +16356,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926059240/infotable.xml",
-      "reported_market_value_usd": 212132567,
+      "reported_market_value_usd": 212133000,
       "reported_market_value_thousands": 212133,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 627,704 shares of CUSIP 874039100, market value $212.13M, as of 2026-03-31.",
       "key_figures": {
@@ -18017,8 +18013,8 @@
       "transaction_code": "",
       "shares": 1656527,
       "price": null,
-      "transaction_value": 354761822,
-      "market_value": 354761822,
+      "transaction_value": 354762000,
+      "market_value": 354762000,
       "cusip": "007903107",
       "position_rank": 14,
       "position_weight": 1.2937306469245105,
@@ -18043,12 +18039,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 354761822,
+      "reported_market_value_usd": 354762000,
       "reported_market_value_thousands": 354762,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,656,527 shares of AMD, market value $354.76M, as of 2025-12-31.",
       "key_figures": {
@@ -18122,8 +18118,8 @@
       "transaction_code": "",
       "shares": 688118,
       "price": null,
-      "transaction_value": 332789699,
-      "market_value": 332789699,
+      "transaction_value": 332790000,
+      "market_value": 332790000,
       "cusip": "594918104",
       "position_rank": 25,
       "position_weight": 0.5162632250035039,
@@ -18148,12 +18144,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000023/renaissance13Fq42025_holding.xml",
-      "reported_market_value_usd": 332789699,
+      "reported_market_value_usd": 332790000,
       "reported_market_value_thousands": 332790,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 688,118 shares of MSFT, market value $332.79M, as of 2025-12-31.",
       "key_figures": {
@@ -18331,8 +18327,8 @@
       "transaction_code": "",
       "shares": 1254577,
       "price": null,
-      "transaction_value": 233978549,
-      "market_value": 233978549,
+      "transaction_value": 233979000,
+      "market_value": 233979000,
       "cusip": "67066G104",
       "position_rank": 19,
       "position_weight": 1.5528766946756625,
@@ -18357,12 +18353,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926013538/infotable.xml",
-      "reported_market_value_usd": 233978549,
+      "reported_market_value_usd": 233979000,
       "reported_market_value_thousands": 233979,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 1,254,577 shares of NVDA, market value $233.98M, as of 2025-12-31.",
       "key_figures": {
@@ -19045,8 +19041,8 @@
       "transaction_code": "",
       "shares": 8016933,
       "price": null,
-      "transaction_value": 1947713872,
-      "market_value": 1947713872,
+      "transaction_value": 1947714000,
+      "market_value": 1947714000,
       "cusip": "92343E102",
       "position_rank": 24,
       "position_weight": 0.7104294047456237,
@@ -19070,12 +19066,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1067983/000119312526054580/50240.xml",
-      "reported_market_value_usd": 1947713872,
+      "reported_market_value_usd": 1947714000,
       "reported_market_value_thousands": 1947714,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Berkshire Hathaway Inc reported 8,016,933 shares of CUSIP 92343E102, market value $1.95B, as of 2025-12-31.",
       "key_figures": {
@@ -19149,8 +19145,8 @@
       "transaction_code": "",
       "shares": 16632088,
       "price": null,
-      "transaction_value": 1889571518,
-      "market_value": 1889571518,
+      "transaction_value": 1889572000,
+      "market_value": 1889572000,
       "cusip": "23918K108",
       "position_rank": 25,
       "position_weight": 0.6892219581403816,
@@ -19174,12 +19170,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1067983/000119312526054580/50240.xml",
-      "reported_market_value_usd": 1889571518,
+      "reported_market_value_usd": 1889572000,
       "reported_market_value_thousands": 1889572,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Berkshire Hathaway Inc reported 16,632,088 shares of CUSIP 23918K108, market value $1.89B, as of 2025-12-31.",
       "key_figures": {
@@ -19779,8 +19775,8 @@
       "transaction_code": "",
       "shares": 3041661,
       "price": null,
-      "transaction_value": 520671530,
-      "market_value": 520671530,
+      "transaction_value": 520672000,
+      "market_value": 520672000,
       "cusip": "512807306",
       "position_rank": 4,
       "position_weight": 1.8987632647294121,
@@ -19805,12 +19801,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 520671530,
+      "reported_market_value_usd": 520672000,
       "reported_market_value_thousands": 520672,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 3,041,661 shares of CUSIP 512807306, market value $520.67M, as of 2025-12-31.",
       "key_figures": {
@@ -19884,8 +19880,8 @@
       "transaction_code": "",
       "shares": 1932066,
       "price": null,
-      "transaction_value": 511823604,
-      "market_value": 511823604,
+      "transaction_value": 511824000,
+      "market_value": 511824000,
       "cusip": "79466L302",
       "position_rank": 5,
       "position_weight": 1.8664970164522225,
@@ -19910,12 +19906,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 511823604,
+      "reported_market_value_usd": 511824000,
       "reported_market_value_thousands": 511824,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,932,066 shares of CUSIP 79466L302, market value $511.82M, as of 2025-12-31.",
       "key_figures": {
@@ -20093,8 +20089,8 @@
       "transaction_code": "",
       "shares": 665997,
       "price": null,
-      "transaction_value": 435275659,
-      "market_value": 435275659,
+      "transaction_value": 435276000,
+      "market_value": 435276000,
       "cusip": "36828A101",
       "position_rank": 10,
       "position_weight": 1.5873451566289525,
@@ -20119,12 +20115,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 435275659,
+      "reported_market_value_usd": 435276000,
       "reported_market_value_thousands": 435276,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 665,997 shares of CUSIP 36828A101, market value $435.28M, as of 2025-12-31.",
       "key_figures": {
@@ -20825,8 +20821,8 @@
       "transaction_code": "",
       "shares": 693002,
       "price": null,
-      "transaction_value": 597603722,
-      "market_value": 597603722,
+      "transaction_value": 597604000,
+      "market_value": 597604000,
       "cusip": "22160K105",
       "position_rank": 9,
       "position_weight": 0.9270744428715547,
@@ -20851,12 +20847,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000023/renaissance13Fq42025_holding.xml",
-      "reported_market_value_usd": 597603722,
+      "reported_market_value_usd": 597604000,
       "reported_market_value_thousands": 597604,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 693,002 shares of CUSIP 22160K105, market value $597.60M, as of 2025-12-31.",
       "key_figures": {
@@ -21138,8 +21134,8 @@
       "transaction_code": "",
       "shares": 5881738,
       "price": null,
-      "transaction_value": 638109775,
-      "market_value": 638109775,
+      "transaction_value": 638110000,
+      "market_value": 638110000,
       "cusip": "77543R102",
       "position_rank": 3,
       "position_weight": 4.2350283924627234,
@@ -21164,12 +21160,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926013538/infotable.xml",
-      "reported_market_value_usd": 638109775,
+      "reported_market_value_usd": 638110000,
       "reported_market_value_thousands": 638110,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 5,881,738 shares of CUSIP 77543R102, market value $638.11M, as of 2025-12-31.",
       "key_figures": {
@@ -21243,8 +21239,8 @@
       "transaction_code": "",
       "shares": 2541928,
       "price": null,
-      "transaction_value": 574831688,
-      "market_value": 574831688,
+      "transaction_value": 574832000,
+      "market_value": 574832000,
       "cusip": "19260Q107",
       "position_rank": 4,
       "position_weight": 3.8150622587896796,
@@ -21269,12 +21265,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926013538/infotable.xml",
-      "reported_market_value_usd": 574831688,
+      "reported_market_value_usd": 574832000,
       "reported_market_value_thousands": 574832,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 2,541,928 shares of CUSIP 19260Q107, market value $574.83M, as of 2025-12-31.",
       "key_figures": {
@@ -32158,8 +32154,8 @@
       "transaction_code": "",
       "shares": 1165740,
       "price": null,
-      "transaction_value": 403462614,
-      "market_value": 403462614,
+      "transaction_value": 403463000,
+      "market_value": 403463000,
       "cusip": "11135F101",
       "position_rank": 12,
       "position_weight": 1.4713306682139942,
@@ -32183,12 +32179,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 403462614,
+      "reported_market_value_usd": 403463000,
       "reported_market_value_thousands": 403463,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,165,740 shares of CUSIP 11135F101, market value $403.46M, as of 2025-12-31.",
       "key_figures": {
@@ -32365,8 +32361,8 @@
       "transaction_code": "",
       "shares": 1313958,
       "price": null,
-      "transaction_value": 271923608,
-      "market_value": 271923608,
+      "transaction_value": 271924000,
+      "market_value": 271924000,
       "cusip": "478160104",
       "position_rank": 15,
       "position_weight": 0.9916396959193848,
@@ -32390,12 +32386,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 271923608,
+      "reported_market_value_usd": 271924000,
       "reported_market_value_thousands": 271924,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,313,958 shares of CUSIP 478160104, market value $271.92M, as of 2025-12-31.",
       "key_figures": {
@@ -32779,8 +32775,8 @@
       "transaction_code": "",
       "shares": 965117,
       "price": null,
-      "transaction_value": 207287829,
-      "market_value": 207287829,
+      "transaction_value": 207288000,
+      "market_value": 207288000,
       "cusip": "98138H101",
       "position_rank": 19,
       "position_weight": 0.7559286272685433,
@@ -32804,12 +32800,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 207287829,
+      "reported_market_value_usd": 207288000,
       "reported_market_value_thousands": 207288,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 965,117 shares of CUSIP 98138H101, market value $207.29M, as of 2025-12-31.",
       "key_figures": {
@@ -32883,8 +32879,8 @@
       "transaction_code": "",
       "shares": 1338885,
       "price": null,
-      "transaction_value": 205103793,
-      "market_value": 205103793,
+      "transaction_value": 205104000,
+      "market_value": 205104000,
       "cusip": "81762P102",
       "position_rank": 20,
       "position_weight": 0.7479639756855259,
@@ -32908,12 +32904,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 205103793,
+      "reported_market_value_usd": 205104000,
       "reported_market_value_thousands": 205104,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 1,338,885 shares of CUSIP 81762P102, market value $205.10M, as of 2025-12-31.",
       "key_figures": {
@@ -33402,12 +33398,12 @@
       "transaction_code": "",
       "shares": 536497,
       "price": null,
-      "transaction_value": 188154863,
-      "market_value": 188154863,
+      "transaction_value": 188155000,
+      "market_value": 188155000,
       "cusip": "92826C839",
       "position_rank": 25,
       "position_weight": 0.6861553231930989,
-      "position_value_label": "$188.15M",
+      "position_value_label": "$188.16M",
       "change_vs_prior": "Pending comparison",
       "score": 52,
       "evidence_grade": "C",
@@ -33427,12 +33423,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1350694/000135069426000001/infotable.xml",
-      "reported_market_value_usd": 188154863,
+      "reported_market_value_usd": 188155000,
       "reported_market_value_thousands": 188155,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Bridgewater Associates LP reported 536,497 shares of CUSIP 92826C839, market value $188.16M, as of 2025-12-31.",
       "key_figures": {
@@ -33506,8 +33502,8 @@
       "transaction_code": "",
       "shares": 5407325,
       "price": null,
-      "transaction_value": 542949503,
-      "market_value": 542949503,
+      "transaction_value": 542950000,
+      "market_value": 542950000,
       "cusip": "94419L101",
       "position_rank": 11,
       "position_weight": 0.8422882747726803,
@@ -33531,12 +33527,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000023/renaissance13Fq42025_holding.xml",
-      "reported_market_value_usd": 542949503,
+      "reported_market_value_usd": 542950000,
       "reported_market_value_thousands": 542950,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 5,407,325 shares of CUSIP 94419L101, market value $542.95M, as of 2025-12-31.",
       "key_figures": {
@@ -34230,8 +34226,8 @@
       "transaction_code": "",
       "shares": 3435737,
       "price": null,
-      "transaction_value": 388581855,
-      "market_value": 388581855,
+      "transaction_value": 388582000,
+      "market_value": 388582000,
       "cusip": "770700102",
       "position_rank": 18,
       "position_weight": 0.6028146972185696,
@@ -34255,12 +34251,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000023/renaissance13Fq42025_holding.xml",
-      "reported_market_value_usd": 388581855,
+      "reported_market_value_usd": 388582000,
       "reported_market_value_thousands": 388582,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 3,435,737 shares of CUSIP 770700102, market value $388.58M, as of 2025-12-31.",
       "key_figures": {
@@ -34542,12 +34538,12 @@
       "transaction_code": "",
       "shares": 1167280,
       "price": null,
-      "transaction_value": 354724719,
-      "market_value": 354724719,
+      "transaction_value": 354725000,
+      "market_value": 354725000,
       "cusip": "874039100",
       "position_rank": 21,
       "position_weight": 0.5502914542418024,
-      "position_value_label": "$354.72M",
+      "position_value_label": "$354.73M",
       "change_vs_prior": "Pending comparison",
       "score": 52,
       "evidence_grade": "C",
@@ -34567,12 +34563,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1037389/000103738926000023/renaissance13Fq42025_holding.xml",
-      "reported_market_value_usd": 354724719,
+      "reported_market_value_usd": 354725000,
       "reported_market_value_thousands": 354725,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: Renaissance Technologies LLC reported 1,167,280 shares of CUSIP 874039100, market value $354.73M, as of 2025-12-31.",
       "key_figures": {
@@ -35683,8 +35679,8 @@
       "transaction_code": "",
       "shares": 748580,
       "price": null,
-      "transaction_value": 227485976,
-      "market_value": 227485976,
+      "transaction_value": 227486000,
+      "market_value": 227486000,
       "cusip": "874039100",
       "position_rank": 20,
       "position_weight": 1.5097865680667466,
@@ -35708,12 +35704,12 @@
       ],
       "caveat": "13F filings are delayed, generally show long U.S. listed holdings, and do not show shorts or current positions. Use as institutional context, not live trade evidence.",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1697748/000110465926013538/infotable.xml",
-      "reported_market_value_usd": 227485976,
+      "reported_market_value_usd": 227486000,
       "reported_market_value_thousands": 227486,
       "market_value_unit_basis": "13F value normalized with implied-price sanity check; SEC values may be thousands or already USD depending parsed source",
       "value_basis_label": "13F value normalized by implied-price sanity check",
       "unit_repair_notes": [
-        "13F value treated as USD after implied-price sanity check."
+        "13F value converted from SEC thousands after implied-price sanity check."
       ],
       "vital_point": "13F holding: ARK Investment Management LLC reported 748,580 shares of CUSIP 874039100, market value $227.49M, as of 2025-12-31.",
       "key_figures": {
