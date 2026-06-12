@@ -1,7 +1,7 @@
 {
   "schema_version": "0.13",
   "data_mode": "sec-watchlist-multilane",
-  "generated_at": "2026-06-12T11:56:57Z",
+  "generated_at": "2026-06-12T19:32:54Z",
   "lookback_days": 180,
   "records_count": 0,
   "lane_count": 4,
@@ -116,10 +116,10 @@
     "data_mode": "sec-watchlist-multilane",
     "source_pipeline": "sec-universal-watchlist-template",
     "refresh_frequency": "tiered",
-    "last_refreshed": "2026-06-12T11:56:57Z",
-    "last_data_update": "2026-06-12T11:56:57Z",
-    "last_sec_check": "2026-06-12T11:56:57Z",
-    "next_scheduled_check": "2026-06-12T12:00:00Z",
+    "last_refreshed": "2026-06-12T19:32:54Z",
+    "last_data_update": "2026-06-12T19:32:54Z",
+    "last_sec_check": "2026-06-12T19:32:54Z",
+    "next_scheduled_check": "2026-06-12T20:00:00Z",
     "source_groups": [
       "SEC Insider Ownership",
       "SEC Ownership Thresholds"
